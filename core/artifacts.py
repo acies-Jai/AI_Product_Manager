@@ -105,3 +105,15 @@ def save_artifacts(artifacts: dict[str, str]) -> None:
     OUTPUTS_DIR.mkdir(exist_ok=True)
     for key, content in artifacts.items():
         (OUTPUTS_DIR / f"{key}.md").write_text(content, encoding="utf-8")
+
+
+def load_saved_artifacts() -> dict[str, str]:
+    """Load artifacts previously saved to outputs/. Returns empty dict if none exist."""
+    result: dict[str, str] = {}
+    if not OUTPUTS_DIR.exists():
+        return result
+    for key in _SECTIONS:
+        path = OUTPUTS_DIR / f"{key}.md"
+        if path.exists():
+            result[key] = path.read_text(encoding="utf-8")
+    return result

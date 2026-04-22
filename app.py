@@ -1,7 +1,9 @@
+import uuid
+
 import streamlit as st
+from langgraph.types import Command
 
 from core import (
-    run_agent,
     log_message,
     generate_artifacts,
     parse_quadrant_sections,
@@ -11,6 +13,7 @@ from core import (
     execute_write,
     preview_write,
 )
+from core.graph import build_graph
 from rag import VectorStore, allowed_levels
 
 st.set_page_config(page_title="Zepto PM Assistant", layout="wide", page_icon="⚡")
@@ -75,17 +78,27 @@ if "artifacts" not in st.session_state:
     st.session_state.artifacts = {}
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "agent_history" not in st.session_state:
-    st.session_state.agent_history = []
 if "vector_store" not in st.session_state:
     st.session_state.vector_store = VectorStore()
 if "pending_write" not in st.session_state:
     st.session_state.pending_write = None
 if "stale_artifacts" not in st.session_state:
     st.session_state.stale_artifacts = False
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
 
 docs: dict = st.session_state.docs
 vs: VectorStore = st.session_state.vector_store
+
+# Build graph once per session — closes over the VectorStore instance
+if "graph" not in st.session_state:
+    st.session_state.graph = build_graph(vs)
+
+graph = st.session_state.graph
+
+
+def _graph_config() -> dict:
+    return {"configurable": {"thread_id": st.session_state.thread_id}}
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -204,7 +217,8 @@ st.divider()
 st.subheader("Live Communication Window")
 st.caption("Open to all departments. The agent searches the knowledge base before responding.")
 
-# Pending write confirmation
+# ── Pending write confirmation ────────────────────────────────────────────────
+
 if st.session_state.pending_write:
     pw = st.session_state.pending_write
     is_delete = pw["tool"] == "propose_delete_file"
@@ -217,43 +231,51 @@ if st.session_state.pending_write:
         col_c, col_x = st.columns(2)
         with col_c:
             if st.button("✅ Confirm", type="primary", use_container_width=True):
-                status = execute_write(pw)
+                result = graph.invoke(Command(resume=True), _graph_config())
                 fresh = load_inputs()
                 st.session_state.docs = fresh
                 vs.index(fresh)
                 st.session_state.pending_write = None
                 st.session_state.stale_artifacts = True
+                reply = result.get("reply", "Done.")
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "display": f"✅ Done — {status}. Use **↻ Regenerate** to refresh the artifacts.",
+                    "display": reply,
                     "tool_events": [],
                 })
                 st.rerun()
         with col_x:
             if st.button("❌ Cancel", use_container_width=True):
+                result = graph.invoke(Command(resume=False), _graph_config())
                 st.session_state.pending_write = None
+                reply = result.get("reply", "Change cancelled.")
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "display": "Change cancelled — no files were modified.",
+                    "display": reply,
                     "tool_events": [],
                 })
                 st.rerun()
 
-# Chat history
+# ── Chat history ──────────────────────────────────────────────────────────────
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["display"])
         if msg["role"] == "assistant" and msg.get("tool_events"):
             searches = [e for e in msg["tool_events"] if e["type"] == "search"]
             emails = [e for e in msg["tool_events"] if e["type"] == "email"]
+            inboxes = [e for e in msg["tool_events"] if e["type"] == "inbox"]
             if searches:
                 with st.expander(f"🔍 Searched {len(searches)} time(s)", expanded=False):
                     for e in searches:
                         st.markdown(f"- `{e['detail']}`")
             for e in emails:
                 st.info(f"📧 Email sent to: {e['detail']}")
+            for e in inboxes:
+                st.info(f"📬 Inbox read — query: `{e['detail']}`")
 
-# Chat input
+# ── Chat input ────────────────────────────────────────────────────────────────
+
 prompt = st.chat_input("Type your message…")
 
 if prompt:
@@ -268,27 +290,68 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(user_display)
 
+    # Input state — only pass fields that change each turn.
+    # history uses operator.add reducer so passing [] is a no-op accumulation.
+    input_state = {
+        "user_message": f"[{role_label}]: {prompt}",
+        "role": role_label,
+        "history": [],
+        "tool_events": [],
+        "pending_write": None,
+    }
+
     with st.chat_message("assistant"):
-        with st.spinner("Searching knowledge base…"):
-            reply, updated_history, tool_events, pending_write = run_agent(
-                f"[{role_label}]: {prompt}",
-                st.session_state.agent_history,
-                vs,
-                role=role_label,
-            )
+        final_result: dict = {}
+
+        with st.status("🤔 Thinking…", expanded=True) as tao_status:
+            for event in graph.stream(input_state, _graph_config(), stream_mode="updates"):
+                for node_name, updates in event.items():
+                    if node_name == "__start__":
+                        continue
+
+                    elif node_name == "classify_intent":
+                        intent = updates.get("intent", "general_chat")
+                        tao_status.update(label=f"💭 Intent: `{intent}`")
+                        st.write(f"**💭 Think** — classified intent as `{intent}`")
+
+                    elif node_name == "retrieve_context":
+                        ctx = updates.get("retrieved_context") or []
+                        if ctx:
+                            sources = list(dict.fromkeys(r["file"] for r in ctx))
+                            st.write(f"**📚 Pre-fetch** — {len(ctx)} chunks from `{'`, `'.join(sources)}`")
+                        else:
+                            st.write("**📚 Pre-fetch** — skipped for this intent")
+
+                    elif node_name == "generate_response":
+                        events = updates.get("tool_events") or []
+                        for i, e in enumerate(events, 1):
+                            if e["type"] == "search":
+                                st.write(f"**⚡ Act [{i}]** — `search_context`: \"{e['detail']}\"")
+                                if e.get("result_preview"):
+                                    st.caption(f"👁️ Observe: {e['result_preview'][:200]}")
+                            elif e["type"] == "email":
+                                st.write(f"**⚡ Act [{i}]** — `send_email` → {e['detail']}")
+                                st.caption(f"👁️ Observe: {e.get('result_preview', 'sent')}")
+                            elif e["type"] == "inbox":
+                                st.write(f"**⚡ Act [{i}]** — `read_inbox`: \"{e['detail']}\"")
+                                if e.get("result_preview"):
+                                    st.caption(f"👁️ Observe: {e['result_preview'][:200]}")
+                            elif e["type"] == "write_staged":
+                                st.write(f"**⚡ Act [{i}]** — `{e['detail']}` staged for confirmation")
+                        if not events:
+                            st.write("**⚡ Act** — direct response (no tools needed)")
+                        final_result = updates
+
+            tao_status.update(label="✅ Response ready", state="complete", expanded=False)
+
+        reply = final_result.get("reply", "")
+        tool_events = final_result.get("tool_events", [])
+        pending_write = final_result.get("pending_write")
+
         st.markdown(reply)
-        searches = [e for e in tool_events if e["type"] == "search"]
-        emails = [e for e in tool_events if e["type"] == "email"]
-        if searches:
-            with st.expander(f"🔍 Searched {len(searches)} time(s)", expanded=False):
-                for e in searches:
-                    st.markdown(f"- `{e['detail']}`")
-        for e in emails:
-            st.info(f"📧 Email sent to: {e['detail']}")
         if pending_write:
             st.info("⏳ A file change has been staged — see the confirmation panel above.")
 
-    st.session_state.agent_history = updated_history
     st.session_state.pending_write = pending_write
     st.session_state.messages.append(
         {"role": "assistant", "display": reply, "tool_events": tool_events}

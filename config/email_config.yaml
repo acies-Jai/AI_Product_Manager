@@ -6,11 +6,16 @@ triggers:
   # Sent automatically when ⚡ Generate Artifacts is clicked
   artifacts_generated:
     recipients:
-      - sneha.iyer@zepto.com
-      - kaivalya@zepto.com
+      - jaiadithya.andi@aciesglobal.com
+      - anirudh.shadipuram@aciesglobal.com
+      - dharshini.venkatesan@aciesglobal.com
+      - fathinaiffat.sirajudeen@aciesglobal.com
+      - madhumohan.reddyyeddula@aciesglobal.com
+      - raghavendra.tiwari@aciesglobal.com
+      - tuhin.samanta@aciesglobal.com
     subject: "PM Artifacts Updated — {date}"
     body: |
-      Hi,
+      Hi team,
 
       The PM Assistant has generated an updated set of artefacts for the
       Customer App & Checkout Experience charter.
@@ -18,19 +23,19 @@ triggers:
       Artefacts included: Roadmap, Key Focus Areas, Requirements,
       Success Metrics, Impact Quadrant.
 
-      Please log in to the PM Assistant dashboard to review.
+      Please review and share your inputs with Jaiadithya (Director of Product).
 
       — PM Intelligence Layer
 
   # Department lead mapping — used by the agent when it identifies an action item.
   # The agent resolves the right department and picks recipients from here.
   action_item_leads:
-    finance:    [ananya.rao@zepto.com, saurabh.j@zepto.com]
-    tech:       [karthik.a@zepto.com]
-    cs:         [divya.k@zepto.com]
-    growth:     [rithvik.n@zepto.com]
-    design:     [ananya.b@zepto.com]
-    operations: [preethi.n@zepto.com]
-    data:       [harish.p@zepto.com]
-    product:    [sneha.iyer@zepto.com]
-    leadership: [aadit@zepto.com, kaivalya@zepto.com]
+    product:    [jaiadithya.andi@aciesglobal.com]
+    tech:       [anirudh.shadipuram@aciesglobal.com]
+    cs:         [dharshini.venkatesan@aciesglobal.com]
+    design:     [fathinaiffat.sirajudeen@aciesglobal.com]
+    finance:    [madhumohan.reddyyeddula@aciesglobal.com]
+    growth:     [raghavendra.tiwari@aciesglobal.com]
+    data:       [tuhin.samanta@aciesglobal.com]
+    operations: [dharshini.venkatesan@aciesglobal.com]
+    leadership: [jaiadithya.andi@aciesglobal.com, anirudh.shadipuram@aciesglobal.com]

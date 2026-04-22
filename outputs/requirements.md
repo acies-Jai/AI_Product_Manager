@@ -1,25 +1,22 @@
 ### Requirements
-Stakeholders need:
-* A faster and more comprehensive onboarding process
-* Improved AI suggestion quality for non-English queries
-* A sandbox environment for training and testing
-* Proactive SLA breach alerts via WhatsApp
-* Bulk ticket assignment and customer health score dashboard
-* Advanced analytics and custom reporting
-* Regional language AI support expansion
+* Automated refund processing for orders <₹500
+* Proactive WhatsApp/SMS alert when ETA changes by >5 min
+* Better order tracking for agents to see real-time dark store status
+* Streamlined first-order flow to reduce steps from 5 to 2
+* Smart search with regional language + typo tolerance
 ### Scope
-In scope:
-* Onboarding process optimization
-* AI suggestion quality improvement
-* Sandbox environment development
-* Proactive SLA breach alerts via WhatsApp
-* Bulk ticket assignment and customer health score dashboard
-Out of scope:
-* Voice channel integration
-* Mobile app development
+In:
+* Automated refund processing
+* Proactive WhatsApp/SMS alerts
+* Better order tracking
+* Streamlined first-order flow
+* Smart search with regional language
+Out:
+* Kafka migration
+* PCI-DSS compliance audit
 ### Final Specification
-* Onboarding process optimization: Reduce onboarding time by 50% within the next 6 weeks
-* AI suggestion quality improvement: Achieve an accuracy rate of 90% for non-English queries within the next 3 months
-* Sandbox environment development: Develop a fully functional sandbox environment within the next 9 weeks
-* Proactive SLA breach alerts via WhatsApp: Send alerts to customers via WhatsApp within the next 6 weeks
-* Bulk ticket assignment and customer health score dashboard: Develop and deploy within the next 12 weeks
+* Automated refund processing: 100% of orders <₹500 are processed automatically
+* Proactive WhatsApp/SMS alert: 100% of customers receive alerts when ETA changes by >5 min
+* Better order tracking: 100% of agents can see real-time dark store status
+* Streamlined first-order flow: First-order flow is reduced to 2 steps
+* Smart search: Search results are optimized for better user experience with regional language support

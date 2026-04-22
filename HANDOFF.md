@@ -43,6 +43,22 @@ outputs/                — generated artifacts + logs (gitignored)
 
 ---
 
+## Demo Readiness Checklist
+
+These are the quickest path to a working end-to-end demo. In order:
+
+| # | Task | Effort | Where |
+|---|------|--------|-------|
+| 1 | Rotate the exposed `GROQ_API_KEY` (see Environment Setup below) | 5 min | console.groq.com |
+| 2 | Fix the text tool call regex (see Known Bug below) | 5 min | `core/agent.py:17` |
+| 3 | Set `GMAIL_SENDER` + `GMAIL_APP_PASSWORD` in `.env` | 5 min | Google Account → Security → App Passwords |
+| 4 | Replace fake `@zepto.com` recipients with real addresses | 5 min | `config/email_config.yaml` + `inputs/employees.md` |
+| 5 | Enable IMAP in Gmail settings + add `read_inbox` tool (see Inbox Reading below) | 2–3 hrs | `core/email_service.py`, `core/tools.py` |
+
+Steps 1–4 unlock real email sending with zero code changes. Step 5 closes the loop so the agent can read replies.
+
+---
+
 ## Known Bug — Text Tool Call Fallback Is Incomplete
 
 **Symptom:** The model (llama-3.3-70b-versatile) sometimes outputs tool calls as plain text instead of structured API calls. Example of what the model produces:
@@ -79,6 +95,120 @@ Additionally, the function only handles `search_context`. If the model writes ot
 
 ---
 
+## Email Inbox Reading
+
+No inbox reading exists in the codebase. Adding it as a `read_inbox` tool closes the full communication loop for the demo: agent sends → stakeholder replies → agent reads and acts.
+
+### Approach: IMAP (recommended for POC)
+
+Uses `imaplib` + `email` from the Python stdlib. No new packages. Reuses the same Gmail App Password already in `.env`.
+
+**Prerequisites (one-time):** In Gmail settings → See All Settings → Forwarding and POP/IMAP → Enable IMAP.
+
+### Implementation
+
+**1. Add `read_inbox()` to `core/email_service.py`:**
+
+```python
+import imaplib, email as emaillib
+from email.header import decode_header
+
+def read_inbox(query: str = "ALL", max_results: int = 5) -> list[dict]:
+    """
+    Fetch recent emails matching query. query is an IMAP search string,
+    e.g. 'FROM "someone@example.com"' or 'SUBJECT "roadmap"'.
+    Returns list of {sender, subject, date, body_snippet}.
+    """
+    sender = os.getenv("GMAIL_SENDER", "")
+    password = os.getenv("GMAIL_APP_PASSWORD", "")
+    if not (sender and password):
+        return [{"error": "GMAIL_SENDER / GMAIL_APP_PASSWORD not set"}]
+
+    with imaplib.IMAP4_SSL("imap.gmail.com") as mail:
+        mail.login(sender, password)
+        mail.select("inbox")
+        _, uids = mail.search(None, query)
+        uid_list = uids[0].split()[-max_results:]  # most recent N
+
+        results = []
+        for uid in reversed(uid_list):
+            _, data = mail.fetch(uid, "(RFC822)")
+            msg = emaillib.message_from_bytes(data[0][1])
+            subject, enc = decode_header(msg["Subject"])[0]
+            if isinstance(subject, bytes):
+                subject = subject.decode(enc or "utf-8", errors="replace")
+            body = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True).decode(errors="replace")
+                        break
+            else:
+                body = msg.get_payload(decode=True).decode(errors="replace")
+            results.append({
+                "sender": msg.get("From"),
+                "subject": subject,
+                "date": msg.get("Date"),
+                "body_snippet": body[:500].strip(),
+            })
+    return results
+```
+
+**2. Add the tool definition to `core/tools.py` `TOOLS` list:**
+
+```python
+{
+    "type": "function",
+    "function": {
+        "name": "read_inbox",
+        "description": (
+            "Read recent emails from the Gmail inbox. Use an IMAP search string "
+            "to filter by sender, subject, or date. Returns sender, subject, date, "
+            "and a 500-char body snippet for each matched email."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "IMAP search string, e.g. 'FROM \"boss@example.com\"' or 'SUBJECT \"roadmap\" SINCE 01-Jan-2025'. Use 'ALL' for most recent.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of emails to return (default 5).",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+```
+
+**3. Add the handler in `run_tool()` in `core/tools.py`:**
+
+```python
+elif name == "read_inbox":
+    results = read_inbox(
+        query=args.get("query", "ALL"),
+        max_results=args.get("max_results", 5),
+    )
+    return json.dumps(results, ensure_ascii=False)
+```
+
+**4. Update the system prompt in `core/agent.py`** to mention `read_inbox` so the model knows when to use it.
+
+### Limitations of IMAP approach
+
+- No threading/conversation view — fetches individual messages
+- IMAP search is basic; no full-text body search (only headers)
+- Long-term, the Gmail API with OAuth2 is the right path (supports search, threading, labels, drafts) but requires a GCP project and OAuth flow
+
+### Where this fits in the migration phases
+
+This is a self-contained addition to the current codebase (no LangGraph needed). In the LangGraph migration, `read_inbox` becomes a tool available to the Communication Agent in Phase 3.
+
+---
+
 ## LangGraph Migration Plan
 
 The current hand-rolled loop in `core/agent.py` is a `for` loop with `if/else` branching. Every new capability makes it harder to reason about. LangGraph replaces it with an explicit state machine.
@@ -99,6 +229,7 @@ class PMState(TypedDict):
     artifacts: dict[str, str]
     reply: str
     emails_sent: list[str]
+    inbox_summary: list[dict]        # results from read_inbox tool
 ```
 
 ### Graph Nodes
@@ -148,6 +279,7 @@ This is where the `StateGraph` definition, node functions, and edge conditions l
 - Add `generate_artifacts`, `send_notification`, `stage_file_edit` as dedicated nodes
 - Conditional routing from `classify_intent`
 - LangGraph checkpointing (SQLite) so state survives Streamlit reruns
+- Add `read_inbox` to `send_notification` node (see Email Inbox Reading above) and expose `inbox_summary` in `PMState`
 
 **Phase 3 — Multi-agent subgraphs**
 - Split into: Research Agent, Document Agent, Communication Agent, Artifact Agent
