@@ -1,0 +1,3 @@
+| Now | Next | Later |
+| --- | --- | --- |
+| Onboarding process optimization, WhatsApp integration enhancement, AI suggestion quality improvement for non-English queries, Bug fixes for CSV export timeout | Sandbox environment development, Proactive SLA breach alerts via WhatsApp, Bulk ticket assignment, Customer health score dashboard | Voice channel integration, Mobile app development, Advanced analytics and custom reporting, Regional language AI support expansion |

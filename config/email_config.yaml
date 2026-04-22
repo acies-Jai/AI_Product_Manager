@@ -1,0 +1,36 @@
+# Email configuration for the PM Assistant
+# Credentials are read from .env (GMAIL_SENDER, GMAIL_APP_PASSWORD)
+# If credentials are absent, emails are logged to outputs/email_log.txt instead
+
+triggers:
+  # Sent automatically when ⚡ Generate Artifacts is clicked
+  artifacts_generated:
+    recipients:
+      - sneha.iyer@zepto.com
+      - kaivalya@zepto.com
+    subject: "PM Artifacts Updated — {date}"
+    body: |
+      Hi,
+
+      The PM Assistant has generated an updated set of artefacts for the
+      Customer App & Checkout Experience charter.
+
+      Artefacts included: Roadmap, Key Focus Areas, Requirements,
+      Success Metrics, Impact Quadrant.
+
+      Please log in to the PM Assistant dashboard to review.
+
+      — PM Intelligence Layer
+
+  # Department lead mapping — used by the agent when it identifies an action item.
+  # The agent resolves the right department and picks recipients from here.
+  action_item_leads:
+    finance:    [ananya.rao@zepto.com, saurabh.j@zepto.com]
+    tech:       [karthik.a@zepto.com]
+    cs:         [divya.k@zepto.com]
+    growth:     [rithvik.n@zepto.com]
+    design:     [ananya.b@zepto.com]
+    operations: [preethi.n@zepto.com]
+    data:       [harish.p@zepto.com]
+    product:    [sneha.iyer@zepto.com]
+    leadership: [aadit@zepto.com, kaivalya@zepto.com]

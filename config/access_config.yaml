@@ -1,0 +1,25 @@
+# Classification assigned to each input document
+# open       → visible to everyone
+# internal   → all staff, not guests / Other
+# restricted → PM, Finance, and Leadership only
+
+documents:
+  product_context:  open
+  employees:        open
+  customer_support: internal
+  sales:            internal
+  tech:             internal
+  finance:          restricted
+
+# Which classification levels each role may query
+roles:
+  Product Manager:          [open, internal, restricted]
+  Leadership:               [open, internal, restricted]
+  Finance:                  [open, internal, restricted]
+  Tech / Engineering:       [open, internal]
+  Customer Experience (CS): [open, internal]
+  Growth & Marketing:       [open, internal]
+  Design:                   [open, internal]
+  Data Science / Analytics: [open, internal]
+  Operations:               [open, internal]
+  Other:                    [open]
