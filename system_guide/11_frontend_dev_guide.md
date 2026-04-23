@@ -1,372 +1,421 @@
-# 11 — Frontend Developer Guide
-### Everything you need to implement `frontend_plan.md`
+# 11 — React Frontend Developer Guide
+### Everything you need to work on `frontend/`
 
-This guide is written for someone who knows HTML/CSS/JS but is new to this project and to
-Streamlit. It covers only what you need to touch to implement the redesign — nothing else.
-
----
-
-## The one file you will edit: `app.py`
-
-The entire UI is in a single file: `app.py` (365 lines). The backend does not change at all.
-You will not touch `core/`, `rag.py`, or any config file.
-
-Here is the exact structure of `app.py` top to bottom — know where each section is before
-you start changing it:
-
-```
-Lines 1–18    imports
-Lines 25–71   _render_quadrant() — the only existing render function
-Lines 74–98   session state initialisation (runs once per browser session)
-Lines 107–154 sidebar (with st.sidebar: block)
-Lines 157–214 main area: header, role selector, artifact tabs
-Lines 218–278 chat history renderer
-Lines 280–364 chat input handler + TAO stream loop
-```
+This guide is for someone who knows React but is new to this project. It covers
+the full stack, the data flow, the state model, and how to extend each part.
 
 ---
 
-## How Streamlit works — the one concept that trips everyone up
+## Stack at a glance
 
-**Streamlit reruns the entire `app.py` from top to bottom on every user interaction.**
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| Framework | React 18 + TypeScript | Component model, strict typing |
+| Build tool | Vite 5 | Fast HMR, first-class TypeScript |
+| Styling | Tailwind CSS 3 | Utility-first, Zepto tokens in `tailwind.config.js` |
+| State | Zustand | Single store, no context boilerplate |
+| Charts | Recharts | React-native chart library |
+| Icons | Lucide React | Consistent SVG icon set |
+| API | Fetch + SSE | Native browser APIs, no extra dependency |
 
-This means:
-- There are no event listeners, no callbacks, no component lifecycle
-- When a button is clicked, the script reruns and `st.button(...)` returns `True` *once*
-- The only way to persist state across reruns is `st.session_state`
-- `st.rerun()` manually triggers another full rerun (used after state mutations)
-
-Practical consequence for the redesign: every HTML/CSS block you write gets re-executed and
-re-rendered on every interaction. Keep rendering functions pure and fast.
-
----
-
-## How to inject CSS
-
-Streamlit has no stylesheet file. All custom CSS is injected via:
-
-```python
-st.markdown("""
-<style>
-  /* your CSS here */
-</style>
-""", unsafe_allow_html=True)
-```
-
-**Where to put it:** at the very top of `app.py`, right after `st.set_page_config(...)` on
-line 20. It runs on every rerender, which is fine — browsers deduplicate `<style>` blocks.
-
-**What you can and cannot target:**
-
-Streamlit renders components inside shadow-like wrappers. Use browser DevTools to find the
-actual CSS selectors. Key ones:
-
-| What | Selector |
-|------|---------|
-| Sidebar container | `[data-testid="stSidebar"]` |
-| Main content area | `.block-container` |
-| Tab list | `.stTabs [data-baseweb="tab-list"]` |
-| A single tab | `.stTabs [data-baseweb="tab"]` |
-| Selected tab | `.stTabs [aria-selected="true"]` |
-| Primary button | `.stButton > button[kind="primary"]` |
-| Any button | `.stButton > button` |
-| Chat message | `[data-testid="stChatMessage"]` |
-| st.status expander | `[data-testid="stStatusWidget"]` |
-
-**Limitation:** Streamlit aggressively scopes some components. If a CSS rule doesn't apply,
-inspect the rendered DOM in DevTools and look for the actual element — it's often one wrapper
-deeper than expected.
+The previous UI was Streamlit (Python). The React app calls the same FastAPI
+backend (`server.py`) via a Vite dev proxy — no CORS config needed in dev.
 
 ---
 
-## How to render custom HTML
+## Running locally
 
-```python
-st.markdown("<div style='color:red'>Hello</div>", unsafe_allow_html=True)
+```bash
+# Terminal 1 — backend (must be running first)
+python -m uvicorn server:app --port 8502
+
+# Terminal 2 — frontend
+cd frontend
+npm install        # first time only
+npm run dev        # http://localhost:5173
 ```
 
-The `unsafe_allow_html=True` flag is required. Without it, Streamlit strips all HTML tags.
-Inline styles are the most reliable approach because Streamlit's class names are auto-generated
-and change between versions.
+The Vite config (`vite.config.ts`) proxies every `/api/*` request to
+`http://localhost:8502`, stripping the `/api` prefix:
 
-**Streamlit does not execute JavaScript.** `<script>` tags inside `st.markdown` are stripped.
-If you need JS behaviour (animations, click handlers), use `st.components.v1.html()` instead —
-this renders inside an iframe and can run JS.
+```ts
+proxy: {
+  '/api': {
+    target: 'http://localhost:8502',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/api/, ''),
+  },
+},
+```
+
+So `fetch('/api/artifacts')` hits `http://localhost:8502/artifacts` transparently.
 
 ---
 
-## Session state — what's available to your render functions
+## App layout
 
-These variables are available anywhere in `app.py` after line 91:
+```
+┌─────────────┬────────────────────────────┬──────────────────┐
+│  Sidebar    │  TopBar (Hero + StatusBar) │                  │
+│  (240px)    ├────────────────────────────┤   ChatPanel      │
+│             │  ArtifactPanel             │   (380px)        │
+│             │  (scrollable)              │                  │
+└─────────────┴────────────────────────────┴──────────────────┘
+```
 
-| Variable | Type | What it contains |
-|----------|------|-----------------|
-| `docs` | `dict[str, str]` | `{"tech": "# Tech...", "finance": "# Finance..."}` — all input files |
-| `vs` | `VectorStore` | The ChromaDB wrapper; call `vs.count()` to get indexed chunk count |
-| `artifacts` | `dict[str, str]` | Keys: `roadmap`, `key_focus_areas`, `requirements`, `success_metrics`, `impact_quadrant`, `rice_score`. Values: raw markdown strings from the LLM. |
-| `st.session_state.messages` | `list[dict]` | Chat history — see structure below |
-| `st.session_state.pending_write` | `dict \| None` | Staged file change — see structure below |
-| `st.session_state.stale_artifacts` | `bool` | True when a document was edited and artifacts need regenerating |
-| `role` | `str` | The currently selected role string from the selectbox |
+`App.tsx` sets up this layout with Tailwind flex:
+```tsx
+<div className="flex h-screen overflow-hidden bg-zepto-bg">
+  <Sidebar />
+  <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+    <TopBar />
+    <div className="flex-1 min-h-0 overflow-y-auto p-5">
+      <ArtifactPanel />
+    </div>
+  </div>
+  <ChatPanel />
+</div>
+```
+
+On mount, `loadInitial()` fires once to fetch `/api/files` and `/api/artifacts`
+in parallel, populating the store.
 
 ---
 
-## Exact data structures you'll render
+## Colour tokens
 
-### `artifacts` dict
-
-```python
-artifacts = {
-    "roadmap": """| Now | Next | Later |
-|-----|------|-------|
-| 1-click reorder | Checkout redesign | Language search |
-| Proactive ETA alerts | Real-time tracking | Personalised home |""",
-
-    "key_focus_areas": """1. **Reduce checkout abandonment** — The install-to-order drop-off...
-2. **Fix search 0-result rate** — Currently at 21%...""",
-
-    "requirements": """## Requirements
-- Users must be able to complete checkout in under 3 steps
-...
-## Scope
-**In:** mobile app, web checkout
-**Out:** dark store operations
-...
-## Final Specification
-Acceptance criteria per requirement...""",
-
-    "success_metrics": """| Initiative | Pre-launch Metric | Post-launch Metric | Owner |
-|------------|-------------------|-------------------|-------|
-| 1-click reorder | Reorder rate 18% | Reorder rate 28% | PM |
-| Checkout redesign | Drop-off 42% | Drop-off 28% | PM / Design |""",
-
-    "impact_quadrant": """--QUICK_WINS--
-- Proactive ETA alerts
-- Automated refunds for small orders
---MAJOR_BETS--
-- Checkout flow redesign
-- Personalised home screen
---LOW_HANGING--
-- Push notification copy refresh
---DEPRIORITISE--
-- Real-time inventory display
---END_QUADRANT--""",
-
-    "rice_score": """| Initiative | Reach | Impact | Confidence | Effort | RICE Score |
-|-----------|-------|--------|------------|--------|------------|
-| 1-click reorder | 800 | 2 | 80% | 2 | 640.0 |
-| Checkout redesign | 600 | 3 | 70% | 5 | 252.0 |"""
-}
-```
-
-The values are **raw LLM output** — they roughly follow the formats above but the exact
-whitespace, number of rows, and phrasing will vary each time artifacts are generated. Write
-parsers defensively (use `.get()`, handle empty strings, strip whitespace).
-
----
-
-### `st.session_state.messages` list
-
-Each item is a dict with these keys:
-
-```python
-{
-    "role": "user",           # or "assistant"
-    "display": "**[Product Manager]** What is the budget?",  # markdown string shown in UI
-    "tool_events": []         # only present on assistant messages
-}
-```
-
-`tool_events` is a list of dicts, one per tool call the agent made:
-
-```python
-[
-    {
-        "type": "search",           # "search" | "email" | "inbox" | "write_staged" | tool_name
-        "detail": "H1 FY26 budget", # query string, recipient email, or tool name
-        "result_preview": "[finance / Budget...]\n## Budget..."  # first 300 chars of result
-    },
-    {
-        "type": "email",
-        "detail": "anirudh.shadipuram@aciesglobal.com",
-        "result_preview": "sent to anirudh.shadipuram@aciesglobal.com"
-    }
-]
-```
-
-User messages always have `tool_events: []`. The user `display` string always starts with
-`**[RoleName]** ` — you can split on `"] "` to separate the role label from the message text.
-
----
-
-### `st.session_state.pending_write` dict
-
-```python
-{
-    "tool": "propose_update_section",   # or "propose_create_file" | "propose_delete_file"
-    "args": {
-        "filename": "tech",             # stem only, no .md
-        "heading": "Feasibility Notes", # exact ## heading text, no ##
-        "new_content": "Updated text..."
-    }
-}
-```
-
-For `propose_create_file`: args are `{"filename": "...", "content": "..."}`.
-For `propose_delete_file`: args are `{"filename": "..."}`.
-
-When `pending_write` is not None, you must render the confirmation panel with Confirm / Cancel
-buttons. Clicking Confirm calls `graph.invoke(Command(resume=True), _graph_config())`.
-
----
-
-## The TAO stream loop — where the live thinking display happens
-
-Lines 309–348 contain the streaming loop. This is the most complex part of `app.py`.
-
-```python
-with st.status("🤔 Thinking…", expanded=True) as tao_status:
-    for event in graph.stream(input_state, _graph_config(), stream_mode="updates"):
-        for node_name, updates in event.items():
-```
-
-`graph.stream()` yields one event dict per graph node as it completes. The three nodes that
-produce UI-visible output:
-
-| `node_name` | `updates` contains | What to render |
-|------------|-------------------|----------------|
-| `"classify_intent"` | `{"intent": "search_query"}` | The detected intent label |
-| `"retrieve_context"` | `{"retrieved_context": [{"file":..., "section":...}]}` | Which files were pre-fetched |
-| `"generate_response"` | `{"tool_events": [...], "reply": "...", "pending_write": ...}` | Each tool call as a step |
-
-**Rule:** anything you call inside this `with st.status(...)` block is rendered inside the
-collapsible expander. `st.write()`, `st.markdown()`, and `st.caption()` all work here.
-
----
-
-## The artifact content parsers you need to write
-
-The `frontend_plan.md` redesigns require parsing the raw markdown strings. Here are the exact
-formats to parse:
-
-### Roadmap table → Now / Next / Later columns
-
-The roadmap is a markdown table. Split rows, skip the header and separator, then split each
-row by `|` to get three cell values:
-
-```python
-def parse_roadmap(content: str) -> dict[str, list[str]]:
-    result = {"now": [], "next": [], "later": []}
-    lines = [l.strip() for l in content.strip().splitlines() if l.strip().startswith("|")]
-    for i, line in enumerate(lines):
-        if i == 0 or all(c in "-| :" for c in line.replace("|", "")):
-            continue  # skip header and separator
-        cells = [c.strip() for c in line.strip("| ").split("|")]
-        if len(cells) >= 3:
-            if cells[0]: result["now"].append(cells[0])
-            if cells[1]: result["next"].append(cells[1])
-            if cells[2]: result["later"].append(cells[2])
-    return result
-```
-
-### RICE Score table → list of dicts
-
-```python
-def parse_rice_table(content: str) -> list[dict]:
-    rows = []
-    lines = [l.strip() for l in content.strip().splitlines() if l.strip().startswith("|")]
-    for i, line in enumerate(lines):
-        if i == 0 or all(c in "-| :" for c in line.replace("|", "")):
-            continue
-        cells = [c.strip() for c in line.strip("| ").split("|")]
-        if len(cells) >= 6:
-            try:
-                rows.append({
-                    "initiative": cells[0],
-                    "reach": cells[1],
-                    "impact": cells[2],
-                    "confidence": cells[3],
-                    "effort": cells[4],
-                    "score": float(cells[5]) if cells[5].replace(".", "").isdigit() else 0,
-                })
-            except (ValueError, IndexError):
-                continue
-    return sorted(rows, key=lambda r: r["score"], reverse=True)
-```
-
-### Impact Quadrant (already parsed)
-
-`parse_quadrant_sections(content)` is already imported and returns:
-```python
-{"quick_wins": "...", "major_bets": "...", "low_hanging": "...", "deprioritise": "..."}
-```
-Each value is the raw bullet text for that quadrant. This is called in `_render_quadrant()`.
-
----
-
-## Plotly in Streamlit
-
-Add `plotly` to `requirements.txt`, then:
-
-```python
-import plotly.graph_objects as go
-fig = go.Figure(...)
-st.plotly_chart(fig, use_container_width=True)
-```
-
-`use_container_width=True` makes the chart fill the column width. Set `config={"displayModeBar": False}` inside `st.plotly_chart()` to hide the Plotly toolbar for a cleaner look.
-
----
-
-## Colour palette (from the existing theme)
+Defined in `tailwind.config.js` under `theme.extend.colors.zepto`:
 
 | Token | Hex | Used for |
 |-------|-----|---------|
-| Brand purple | `#5E17EB` | Primary actions, headers, table headers |
-| Light purple | `#7C3AED` | Gradient end, hover states |
-| Background tint | `#F0EAFF` | Tab bar, status strip background |
-| Dark sidebar | `#1A0533` | Sidebar background |
-| Text dark | `#1A0533` | Body text |
-| Green | `#10B981` | Success, Quick Wins, full access |
-| Amber | `#F59E0B` | Warning, Next column, medium RICE |
-| Red | `#EF4444` | Danger, Major Bets, low RICE |
-| Blue | `#0EA5E9` | Tech role, search events |
-| Pink | `#EC4899` | Design role |
+| `zepto-purple` | `#5E17EB` | Primary actions, headings, badges |
+| `zepto-light` | `#7C3AED` | Gradient end, hover |
+| `zepto-pale` | `#9F67FA` | Gradient tail |
+| `zepto-dark` | `#1A0533` | Sidebar background, headings |
+| `zepto-bg` | `#F4F0FC` | App background |
+| `zepto-tint` | `#F0EAFF` | Tab bar, chip backgrounds |
+| `zepto-muted` | `#EDE9FF` | Borders, dividers |
+
+Use `bg-zepto-purple`, `text-zepto-dark`, `border-zepto-muted`, etc. in Tailwind classes.
+
+---
+
+## Custom CSS classes (`src/index.css`)
+
+Four reusable classes defined in the `@layer components` block:
+
+| Class | What it renders |
+|-------|----------------|
+| `.card` | White card with `zepto-muted` border, subtle shadow, `rounded-2xl` |
+| `.btn-primary` | Purple gradient button with hover lift and shadow |
+| `.btn-ghost` | Transparent button with border, `zepto-purple` text |
+| `.role-badge` | Coloured pill (inline-flex, rounded-full) — pass `style` for dynamic colour |
+
+Markdown content rendered inside artifact tabs uses the `.prose` block for
+typography. The `pre` and `code` elements inside it are overridden to use the
+Zepto tint background.
+
+---
+
+## Types (`src/types.ts`)
+
+All shared interfaces live here. Key ones:
+
+```ts
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  roleLabel?: string        // set on user messages
+  toolEvents?: ToolEvent[]  // set on assistant messages
+}
+
+interface TaoStep {
+  id: string
+  node: string    // 'classify_intent' | 'retrieve_context' | 'tool' | 'direct'
+  label: string   // human-readable step name
+  detail: string  // short description
+  color: string   // hex, used for the timeline accent
+  icon: string    // emoji
+}
+
+interface PendingWrite {
+  tool: 'propose_update_section' | 'propose_create_file' | 'propose_delete_file'
+  args: Record<string, string>
+}
+```
+
+Constants also exported from here — use them instead of hardcoding strings:
+
+```ts
+ROLES              // string[] — all role names in display order
+ROLE_CONFIG        // Record<string, { color, icon, access }>
+ARTIFACT_KEYS      // readonly tuple — 6 artifact keys
+ARTIFACT_LABELS    // Record<ArtifactKey, string> — display names
+```
+
+---
+
+## API layer (`src/api.ts`)
+
+All functions call `/api/*` (proxied to the backend). Each throws on non-2xx.
+
+| Function | Endpoint | Returns |
+|----------|---------|---------|
+| `fetchFiles()` | `GET /files` | `{ files, indexed, chunks }` |
+| `fetchArtifacts()` | `GET /artifacts` | `Record<string, string>` |
+| `indexDocuments()` | `POST /index` | `{ chunks, files }` |
+| `generateArtifacts()` | `POST /generate-artifacts?notify=false` | full artifacts response |
+| `notifyTeam()` | `POST /notify-team` | `{ email_status }` |
+| `confirmWrite(threadId, confirmed)` | `POST /confirm` | `{ reply }` |
+| `streamChat(message, role, threadId)` | `POST /chat/stream` | async generator |
+
+### The SSE streaming function
+
+`streamChat` is an **async generator** — `yield`s one parsed event object per
+SSE line as it arrives from the backend:
+
+```ts
+export async function* streamChat(message: string, role: string, threadId: string) {
+  const res = await fetch('/api/chat/stream', { method: 'POST', ... })
+  const reader = res.body.getReader()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''          // keep partial last line
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        yield JSON.parse(line.slice(6))
+      }
+    }
+  }
+}
+```
+
+The buffer/split pattern handles chunked delivery — a single `read()` may
+contain multiple SSE lines or a partial line. The incomplete last line is held
+in `buffer` and prepended on the next read.
+
+Consume it with `for await`:
+```ts
+for await (const event of streamChat(message, role, threadId)) {
+  if (event.node === '__done__') break
+  // event.node is one of: 'classify_intent', 'retrieve_context', 'generate_response'
+  // event.updates contains the node's state updates
+  // event.thread_id is the session ID
+}
+```
+
+---
+
+## State management (`src/store.ts`)
+
+One Zustand store. Access it anywhere with `useStore(selector)`:
+
+```ts
+const artifacts = useStore(s => s.artifacts)
+const sendMessage = useStore(s => s.sendMessage)
+```
+
+### Full state shape
+
+```ts
+chunksIndexed: number       // from /files
+files: string[]             // from /files
+artifacts: Artifacts        // from /artifacts
+staleArtifacts: boolean     // set true when a doc is confirmed-written
+role: string                // currently selected role
+activeTab: string           // which artifact tab is showing
+isIndexing: boolean         // loading flag for Index button
+isGenerating: boolean       // loading flag for Generate button
+messages: Message[]         // full chat history
+isThinking: boolean         // true while SSE stream is in progress
+taoSteps: TaoStep[]         // steps accumulating during stream; cleared after
+pendingWrite: PendingWrite | null
+threadId: string            // UUID, generated once on store init (not reset)
+```
+
+### Actions
+
+| Action | What it does |
+|--------|-------------|
+| `loadInitial()` | Parallel fetch of `/files` + `/artifacts`; populates store on mount |
+| `indexDocuments()` | Sets `isIndexing`, calls `/index`, updates `chunksIndexed` + `files` |
+| `generateArtifacts()` | Sets `isGenerating`, calls `/generate-artifacts`, re-fetches artifacts, resets `staleArtifacts` |
+| `sendMessage(text)` | Appends user message, opens SSE stream, accumulates `taoSteps`, appends assistant message, sets `pendingWrite` |
+| `confirmWrite(confirmed)` | Calls `/confirm`, appends reply message, clears `pendingWrite`, sets `staleArtifacts: confirmed` |
+| `setRole(role)` | Updates `role` |
+| `setActiveTab(tab)` | Updates `activeTab` |
+
+### How `sendMessage` builds the TAO steps
+
+```ts
+for await (const event of api.streamChat(message, role, threadId)) {
+  if (event.node === 'classify_intent')   → push { label: 'Order received', ... }
+  if (event.node === 'retrieve_context')  → push { label: 'Packing context', ... }
+  if (event.node === 'generate_response') → push one step per tool_event
+                                            or one 'Express delivery' step if none
+}
+```
+
+Steps accumulate into `taoSteps` as they arrive so the UI can render them
+progressively. After the stream ends and the assistant message is appended,
+`taoSteps` is reset to `[]`.
+
+---
+
+## Component responsibilities
+
+### Layout components
+
+**`Sidebar.tsx`**
+- Branded header ("⚡ Zepto")
+- File list with indexed indicator per file
+- Three action buttons: Index Documents, ⚡ Generate Artifacts, 📧 Notify Team
+- Artifact progress bar (n/6 complete)
+- Reads: `files`, `chunksIndexed`, `isIndexing`, `isGenerating`, `artifacts`
+- Calls: `indexDocuments()`, `generateArtifacts()`, `notifyTeam()` (direct API call)
+
+**`TopBar.tsx`**
+- Renders `<Hero />` + `<StatusBar />`
+- Also contains `<RoleSelector />` inline
+
+**`Hero.tsx`**
+- Purple gradient banner, tagline, chunk count badge
+
+**`StatusBar.tsx`**
+- `{chunks} sources indexed · {n} knowledge files · {n}/6 artefacts ready`
+- Shows stale-artifacts warning + Regenerate button when `staleArtifacts` is true
+
+**`RoleSelector.tsx`**
+- `<select>` over `ROLES`; calls `setRole()` on change
+- Coloured badge showing current role's icon, name, and access level
+
+### Chat components
+
+**`ChatPanel.tsx`**
+- Fixed right column, 380px wide
+- Renders `messages` as `<MessageBubble>` components
+- Shows `<TaoStepper>` when `isThinking` is true
+- Shows `<PendingWriteCard>` when `pendingWrite` is set
+- Text area input — submits on Enter (Shift+Enter for newline)
+- Suggested prompt chips shown when `messages` is empty
+
+**`TaoStepper.tsx`**
+- Renders `taoSteps` as a vertical timeline
+- Each step: left-side coloured bar + dot, label (bold, coloured), detail (grey)
+- Animated "typing" indicator at the bottom while `isThinking`
+
+**`PendingWriteCard.tsx`**
+- Amber card for update/create; red card for delete
+- Shows operation type, filename, heading or content preview
+- Confirm and Cancel buttons → call `confirmWrite(true/false)`
+
+### Artifact panel
+
+**`ArtifactPanel.tsx`**
+- Tab bar using `ARTIFACT_KEYS` + `ARTIFACT_LABELS`
+- Active tab tracked in store (`activeTab`)
+- Shows loading skeleton when `isGenerating`
+- Shows onboarding card when no artifacts
+- Delegates to the correct `*Tab` component based on `activeTab`
+
+**Tab components** (all in `components/artifacts/`):
+
+| Component | Input | Renders |
+|-----------|-------|---------|
+| `RoadmapTab` | `roadmap` + `roadmap_timeline` (optional) | Kanban columns + Recharts Gantt |
+| `RiceTab` | `rice_score` | Recharts horizontal bar chart + collapsible table |
+| `MetricsTab` | `success_metrics` | Styled table with owner colour badges |
+| `QuadrantTab` | `impact_quadrant` | 2×2 grid of coloured cards |
+| `KeyFocusTab` | `key_focus_areas` | Numbered cards with title + bullets |
+| `RequirementsTab` | `requirements` | Sectioned cards (Requirements / Scope / Spec) |
+
+**`StyledTable.tsx`** — shared utility component that takes a markdown table
+string and renders it as a styled HTML table with configurable column templates
+and cell renderers. Used by MetricsTab and anywhere else a table is needed.
+
+---
+
+## Parsing patterns
+
+Every tab receives the raw LLM output string and must parse it defensively.
+The standard pattern used across tabs:
+
+```ts
+function parseMarkdownTable(content: string): string[][] {
+  const lines = content.split('\n').filter(l => l.trim().startsWith('|'))
+  return lines
+    .filter(l => !l.replace(/\|/g, '').trim().match(/^[-: ]+$/))  // skip separator
+    .map(l => l.split('|').slice(1, -1).map(c => c.trim()))
+}
+```
+
+- Row 0 is always the header
+- Rows 1+ are data rows
+- Handle empty strings and missing cells with `.at(i) ?? ''`
+
+For the roadmap timeline dates, `RoadmapTab` parses `"Mon YYYY"` strings:
+```ts
+new Date(`1 ${cell}`)  // e.g. new Date("1 Apr 2026")
+```
+
+For the impact quadrant, `QuadrantTab` parses the `--SECTION--` delimiter
+format (same logic as the Python `parse_quadrant_sections()` in `core/artifacts.py`).
+
+---
+
+## Adding a new artifact tab
+
+1. **Backend** — add the delimiter and key to `core/artifacts.py` (see `09_artifacts_and_rice.md`)
+2. **`types.ts`** — add the key to `ARTIFACT_KEYS` and a label to `ARTIFACT_LABELS`
+3. **Create** `src/components/artifacts/NewTab.tsx` — accept `content: string`, parse and render
+4. **`ArtifactPanel.tsx`** — import the new component and add a `case` in the tab switcher
+
+That's the full change surface. The store, API, and backend all pick up new artifact keys automatically because they use `Record<string, string>`.
+
+---
+
+## Adding a new API call
+
+1. Add a typed function to `src/api.ts` using the same `fetch` + `throw on !res.ok` pattern
+2. Add the action to the store interface in `src/store.ts` and implement it
+3. Wire the action to whatever UI element triggers it
+
+Do not call `api.*` functions directly from components — put all API calls through the store so loading flags and state updates stay consistent.
 
 ---
 
 ## What NOT to change
 
-- Do not touch anything in `core/`, `rag.py`, `server.py`, or `config/`
-- Do not remove `st.session_state` initialisations (lines 76–89) — the rest of the app depends on them
-- Do not change how `graph.stream()` is called (lines 310–346) — only change what is rendered inside the loop
-- Do not remove the `Command(resume=True/False)` calls on lines 237 and 252 — these are how file writes are confirmed
-- The `_render_quadrant()` function (lines 25–71) can be replaced entirely with a better version — it is self-contained
+- Do not rename `ARTIFACT_KEYS` values — they must match the keys returned by `GET /api/artifacts` and the filenames in `outputs/`
+- Do not change the `threadId` generation in the store — it is set once at store init; resetting it starts a new conversation session and loses multi-turn memory
+- Do not remove the `buffer` logic in `streamChat()` — it is required to handle chunked SSE delivery correctly
+- Do not bypass the store for API calls — always go through store actions so `isThinking`, `isIndexing`, etc. stay in sync with the UI
+- Do not add `streamlit` or `plotly` back to `requirements.txt` — the backend no longer needs them
 
 ---
 
-## Testing your changes
+## Testing the frontend
 
-Start the app:
 ```bash
-streamlit run app.py
-```
+# 1. Confirm backend is running
+curl http://localhost:8502/health
 
-For each UI change, verify it looks correct at three states:
-1. **Not indexed:** `vs.count() == 0` — should show the empty onboarding state
-2. **Indexed, no artifacts:** chunks > 0 but `artifacts == {}` — should show the generate prompt
-3. **Fully loaded:** chunks > 0 and all 6 artifacts present — should show all tabs and chat
+# 2. Start frontend
+cd frontend && npm run dev
 
-Use the FastAPI server to generate test data without going through the UI:
-```bash
-# In a separate terminal:
-python -m uvicorn server:app --port 8502
+# 3. Verify three states:
+#    a. No artifacts yet: should show the onboarding card
+#    b. After clicking Index: chunk count badge updates
+#    c. After Generate Artifacts: all 6 tabs populate
 
-# Index
-curl -X POST http://localhost:8502/index
-
-# Generate artifacts
-curl -X POST http://localhost:8502/generate-artifacts
-
-# Now the outputs/*.md files exist and the Streamlit app will load them
+# 4. Chat test (use the /api testing guide for curl equivalents):
+#    - Select "Product Manager", ask about budget → real data
+#    - Select "Design", ask about budget → access denied message
+#    - Ask anything → TAO stepper shows steps during stream
+#    - Ask to update a doc → PendingWriteCard appears, Confirm writes file
 ```
