@@ -153,7 +153,12 @@ def build_graph(vector_store: VectorStore):
             )
             messages.append({
                 "role": "system",
-                "content": f"Pre-retrieved context for this query:\n\n{context_text}",
+                "content": (
+                    "Relevant context has already been retrieved for this query and is provided "
+                    "below. Answer directly from it — do NOT call search_context for the same "
+                    "topic or narrate that you will search.\n\n"
+                    + context_text
+                ),
             })
 
         # Conversation history from previous turns (accumulated by checkpointer)
@@ -325,8 +330,18 @@ def _all_searches_empty(tool_events: list[dict]) -> bool:
     return all("SEARCH_EMPTY" in e.get("result_preview", "") for e in searches)
 
 
-def _should_deny_access(intent: str, tool_events: list[dict], reply: str) -> bool:
-    """True when the reply likely contains hallucinated restricted data."""
+_FULL_ACCESS_ROLES = {"Product Manager", "Finance", "Leadership"}
+
+
+def _should_deny_access(intent: str, tool_events: list[dict], reply: str, role: str = "") -> bool:
+    """True when the reply likely contains hallucinated restricted data.
+
+    Never fires for full-access roles (PM, Finance, Leadership) — if their search
+    returned empty it means the data is genuinely absent from the knowledge base,
+    not that it is restricted from them.
+    """
+    if role in _FULL_ACCESS_ROLES:
+        return False
     if not _DATA_PATTERNS.search(reply):
         return False
     # Case 1: searches were made but every one returned SEARCH_EMPTY
@@ -351,7 +366,7 @@ def _make_return(
     bypassed RAG or all searches returned empty — guards against hallucination
     of restricted financial/metric data.
     """
-    if _should_deny_access(state.get("intent", ""), tool_events, reply):
+    if _should_deny_access(state.get("intent", ""), tool_events, reply, state.get("role", "")):
         reply = (
             "This information is restricted and not accessible for your current role. "
             "The data you're asking about (budgets, financials, or restricted metrics) "

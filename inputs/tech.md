@@ -16,10 +16,9 @@ VP Engineering (Karthik Anand) + 4 engineering managers + 48 engineers across 6 
 - Backend: Go (primary), Python (ML services)
 - Mobile: React Native
 - Data streaming: Kafka
-- DB: PostgreSQL + Redis
+- DB: PostgreSQL + Redis + MySQL
 - Search: Elasticsearch
 - ML infra: Internal feature store + Vertex AI
-
 ## Active Problems
 1. **Checkout latency P95 = 4.2s** — root cause: synchronous inventory check call to OMS on every page load; needs async caching layer
 2. **Payment failure rate 2.1%** — UPI timeout after 30s; Juspay suggests reducing to 20s with retry logic
@@ -27,14 +26,7 @@ VP Engineering (Karthik Anand) + 4 engineering managers + 48 engineers across 6 
 4. **Search 0-result rate 21%** — Elasticsearch index not handling transliteration or common Hindi/Tamil synonyms
 
 ## Feasibility Notes
-- **1-click reorder**: 1–2 sprints. Cart service already supports saved carts.
-- **Automated refund for small orders**: 2–3 sprints. Rule engine + payment gateway refund API already wired.
-- **Proactive ETA alerts**: 2 sprints. Kafka event for ETA change exists; just needs notification dispatch.
-- **Checkout flow redesign (reduce steps)**: 4–5 sprints. Requires FE + BE + design alignment.
-- **Regional language search**: 3–4 sprints. Elasticsearch synonym config + transliteration plugin.
-- **Real-time order tracking (packing status)**: 3 sprints. Dark store tablet app already pushes events to Kafka.
-- **Personalised home screen**: 5–6 sprints. Personalisation pod has model ready; FE integration pending.
-
+per previous notes. Additional note: 2 new engineers are joining next sprint.
 ## Capacity Constraints
 - Platform Pod fully committed to Kafka migration until end of Q1 (~5 weeks)
 - 2 senior engineers from Checkout Pod on PCI-DSS compliance audit until mid-Q2

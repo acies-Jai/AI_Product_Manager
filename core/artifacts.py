@@ -9,6 +9,7 @@ _ARTIFACT_QUERIES = [
     "finance budget unit economics constraints ROI",
     "growth acquisition retention metrics funnels",
     "competitive landscape market differentiators",
+    "initiative prioritisation effort reach impact confidence",
 ]
 
 _ARTIFACT_PROMPT = """\
@@ -40,13 +41,19 @@ Use EXACTLY these sub-delimiters within this section. Each section should have 3
 [bullet points — Low Impact, High Effort initiatives]
 --END_QUADRANT--
 
+===RICE_SCORE===
+Markdown table prioritising the initiatives from the Roadmap above using the RICE framework.
+Columns: Initiative | Reach (users/week, 1–1000) | Impact (0.25 / 0.5 / 1 / 2 / 3) | Confidence (10%–100%) | Effort (person-weeks) | RICE Score
+RICE Score = (Reach × Impact × Confidence%) ÷ Effort. Round to 1 decimal place. Sort rows by RICE Score descending.
+Use only initiatives already listed in the Roadmap — do not invent new ones. Derive estimates from the org context.
+
 ===END===
 
 Replace the description under each delimiter with the actual content. No extra text outside the delimiters."""
 
-_SECTIONS = ["roadmap", "key_focus_areas", "requirements", "success_metrics", "impact_quadrant"]
+_SECTIONS = ["roadmap", "key_focus_areas", "requirements", "success_metrics", "impact_quadrant", "rice_score"]
 _DELIMITERS = ["===ROADMAP===", "===KEY_FOCUS_AREAS===", "===REQUIREMENTS===",
-               "===SUCCESS_METRICS===", "===IMPACT_QUADRANT===", "===END==="]
+               "===SUCCESS_METRICS===", "===IMPACT_QUADRANT===", "===RICE_SCORE===", "===END==="]
 
 _QUAD_KEYS = ["quick_wins", "major_bets", "low_hanging", "deprioritise"]
 _QUAD_DELIMS = ["--QUICK_WINS--", "--MAJOR_BETS--", "--LOW_HANGING--", "--DEPRIORITISE--", "--END_QUADRANT--"]

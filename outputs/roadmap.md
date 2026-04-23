@@ -1,5 +1,3 @@
 | Now | Next | Later |
 | --- | --- | --- |
-| Automated refund processing, Proactive WhatsApp/SMS alert, Streamlined first-order flow, Smart search with regional language | Personalised home screen, Reactivation nudges, Improve order tracking for agents | Kafka migration, PCI-DSS compliance audit, Bulk action tools for handling surge periods |
-| Reduce payment failure rate, Improve checkout latency, Enhance app performance | Integrate automated refund processing with existing systems, Optimize search results for better user experience | Expand smart search to include more regional languages, Introduce voice search functionality |
-|  | Enhance order tracking for better customer experience, Introduce real-time dark store status updates | Improve overall app UX, Expand reactivation nudges to include more personalized offers |
+| Automated refund processing for orders <₹500, Proactive WhatsApp/SMS alert when ETA changes by >5 min, Streamlined first-order flow | Personalised home screen, Smart search with regional language + typo tolerance, Reduce payment failure rate | Reactivation nudges based on purchase history, Bulk action tools for handling surge periods, Improve order tracking for agents to see real-time dark store status |

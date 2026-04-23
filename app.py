@@ -8,6 +8,7 @@ from core import (
     generate_artifacts,
     parse_quadrant_sections,
     save_artifacts,
+    load_saved_artifacts,
     notify_artifacts_generated,
     load_inputs,
     execute_write,
@@ -75,7 +76,7 @@ def _render_quadrant(content: str) -> None:
 if "docs" not in st.session_state:
     st.session_state.docs = load_inputs()
 if "artifacts" not in st.session_state:
-    st.session_state.artifacts = {}
+    st.session_state.artifacts = load_saved_artifacts()
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "vector_store" not in st.session_state:
@@ -147,6 +148,7 @@ with st.sidebar:
             email_status = notify_artifacts_generated(st.session_state.artifacts)
             st.success("Done — saved to outputs/")
             st.caption(f"Email: {email_status}")
+            st.rerun()
 
     if st.session_state.artifacts:
         st.caption("Outputs saved to outputs/")
@@ -196,9 +198,10 @@ if st.session_state.stale_artifacts and st.session_state.artifacts:
 artifacts: dict = st.session_state.artifacts
 
 if artifacts:
-    tabs = st.tabs(["Roadmap", "Key Focus Areas", "Requirements", "Success Metrics", "Impact Quadrant"])
-    keys = ["roadmap", "key_focus_areas", "requirements", "success_metrics", "impact_quadrant"]
-    for tab, key, label in zip(tabs, keys, ["Roadmap", "Key Focus Areas", "Requirements", "Success Metrics", "Impact Quadrant"]):
+    tab_labels = ["Roadmap", "Key Focus Areas", "Requirements", "Success Metrics", "Impact Quadrant", "RICE Score"]
+    keys = ["roadmap", "key_focus_areas", "requirements", "success_metrics", "impact_quadrant", "rice_score"]
+    tabs = st.tabs(tab_labels)
+    for tab, key, label in zip(tabs, keys, tab_labels):
         with tab:
             content = artifacts.get(key)
             if not content:

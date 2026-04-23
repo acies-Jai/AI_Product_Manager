@@ -1,1 +1,6 @@
 .env
+.chroma/
+__pycache__/
+*.pyc
+outputs/chat_log.txt
+outputs/email_log.txt

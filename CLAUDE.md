@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Zepto PM Assistant — an agentic AI assistant for Product Managers at Zepto. It reads structured markdown knowledge files, answers PM questions via RAG with RBAC, generates strategic artifacts (roadmaps, requirements, success metrics, impact quadrants), and facilitates cross-departmental communication via email.
+Zepto PM Assistant — an agentic AI assistant for Product Managers at Zepto. It reads structured markdown knowledge files, answers PM questions via RAG with RBAC, generates six strategic artifacts (Roadmap, Key Focus Areas, Requirements, Success Metrics, Impact Quadrant, RICE Score), and facilitates cross-departmental communication via email.
 
 **LLM Provider:** Groq (`llama-3.3-70b-versatile`)  
 **Vector DB:** ChromaDB (persistent in `.chroma/`)  
@@ -42,18 +42,20 @@ User selects role → types prompt
 → User confirms → execute_write() → reload docs → reindex vector store
 ```
 
-### Agentic Loop: `core/agent.py`
+### Agentic Loop: `core/graph.py`
 
-`run_agent()` runs a for-loop calling Groq with 6 tool definitions. On each iteration:
-- Structured `tool_calls` from the API response → dispatched via `run_tool()`
-- Plain-text tool calls (fallback path) → parsed via regex (see known bug below)
-- Content with no tools → final reply returned
+LangGraph `StateGraph` with four nodes: `classify_intent → retrieve_context → generate_response → human_confirm`. The `generate_response` node runs the Groq agentic loop (max 8 iterations) with 7 tools. Uses `MemorySaver` checkpointer keyed on `thread_id` (UUID per session).
 
-**Known Bug (lines ~10–23):** The text-fallback regex only matches `=tool_name:` prefix (equals sign). The model sometimes outputs `-tool_name:` (dash prefix), causing the search to silently fail and returning a monologue. Fix: change the regex to `r'[-=](\w+):\s*["\']?(.+?)["\']?\s*$'`.
+- Structured `tool_calls` → dispatched via `run_tool()`
+- Plain-text tool calls (fallback) → `_parse_text_tool_call()` regex (handles `[-=]?tool_name:` and bare `tool_name:`)
+- Narration guard → detects model describing a search without calling the tool, injects a correction, retries
+- Hallucination guard → `_should_deny_access()` intercepts replies with financial patterns when no valid search was made
+
+`core/agent.py` is now only `log_message()` — the hand-rolled loop has been removed.
 
 ### Tool System: `core/tools.py`
 
-6 tools dispatched by `run_tool()`:
+7 tools dispatched by `run_tool()`:
 
 | Tool | Purpose |
 |------|---------|
@@ -62,9 +64,12 @@ User selects role → types prompt
 | `read_file` | Read full content of a single input doc |
 | `propose_update_section` | Stage a `## Heading` section replacement (requires confirmation) |
 | `propose_create_file` | Stage creating a new `.md` in `inputs/` (requires confirmation) |
+| `read_inbox` | Read recent Gmail inbox messages via IMAP search string |
+| `propose_update_section` | Stage a `## Heading` section replacement (requires confirmation) |
+| `propose_create_file` | Stage creating a new `.md` in `inputs/` (requires confirmation) |
 | `propose_delete_file` | Stage file deletion (irreversible; requires confirmation) |
 
-`propose_*` tools don't write immediately — they append to `pending_writes` and the user confirms via UI.
+`propose_*` tools don't write immediately — they append to `pending_writes` and the user confirms via UI. `send_email` rejects addresses not in `employees.md`.
 
 ### RAG & RBAC: `rag.py`
 
@@ -75,7 +80,7 @@ Role permissions are defined in `config/access_config.yaml`. `finance.md` and `s
 
 ### Artifact Generation: `core/artifacts.py`
 
-Triggered by ⚡ Generate Artifacts button. Runs 7 hardcoded semantic queries against the vector store, deduplicates chunks, sends to Groq with a structured prompt, and parses 5 artifacts using delimiter tokens (`===ROADMAP===`, `===KEY_FOCUS_AREAS===`, etc.). Saves to `outputs/` and sends notification emails.
+Triggered by ⚡ Generate Artifacts button. Runs 8 hardcoded semantic queries against the vector store, deduplicates chunks, sends to Groq with a structured prompt, and parses 6 artifacts using delimiter tokens (`===ROADMAP===`, `===KEY_FOCUS_AREAS===`, `===RICE_SCORE===`, etc.). Saves to `outputs/` and sends notification emails. `load_saved_artifacts()` reloads them on app startup so tabs render without re-generating.
 
 ### File Operations: `core/files.py`
 
@@ -100,12 +105,12 @@ Triggered by ⚡ Generate Artifacts button. Runs 7 hardcoded semantic queries ag
 
 ## Known Issues & Technical Debt
 
-1. **Text tool call regex bug** (`core/agent.py` lines ~10–23) — see above
-2. **No test suite** — all testing is manual via UI
-3. **Hardcoded artifact queries** — `_ARTIFACT_QUERIES` in `artifacts.py` are fixed; not configurable
-4. **No web search** — agent can only search internal documents
-5. **Session state fragility** — state lost on server restart; migration to LangGraph planned (see `HANDOFF.md`)
+1. **No test suite** — all testing is manual via UI
+2. **Hardcoded artifact queries** — `_ARTIFACT_QUERIES` in `artifacts.py` are fixed; not configurable
+3. **No web search** — agent can only search internal documents
+4. **MemorySaver is in-memory** — history lost on server restart; migrate to `SqliteSaver` for persistence
+5. **Single pending_write at a time** — only one file change can be staged per turn
 
-## Migration Target: LangGraph
+## System Documentation
 
-`HANDOFF.md` documents a planned migration from the hand-rolled agentic loop to a LangGraph state machine with nodes: `classify_intent → retrieve_context → generate_response → stage_file_edit / send_notification / generate_artifacts → human_confirm`. The proposed `PMState` TypedDict and node decomposition are documented there.
+See `SYSTEM_GUIDE.md` for a full end-to-end explanation of all system layers, data flow diagrams, RBAC details, hallucination guards, and a 10-question FAQ for demos and onboarding.

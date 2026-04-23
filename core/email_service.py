@@ -22,28 +22,78 @@ def _load_config() -> dict:
     return {}
 
 
-def send_or_log(to: list[str], subject: str, body: str) -> str:
-    """Send via Gmail SMTP if credentials are set, otherwise log to outputs/email_log.txt."""
+_SIGNATURE = "\n\nBest regards,\nZepto PM Intelligence Layer"
+
+_AGENT_EMAIL_TEMPLATE = """\
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#5E17EB;padding:24px 32px;">
+            <span style="color:#ffffff;font-size:22px;font-weight:700;">⚡ Zepto</span>
+            <span style="color:rgba(255,255,255,0.7);font-size:13px;margin-left:8px;">PM Intelligence Layer</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px 32px;color:#333;font-size:15px;line-height:1.7;">
+            {body_html}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 32px 24px;background:#fafafa;border-top:1px solid #f0f0f0;font-size:12px;color:#999;">
+            This message was sent by the Zepto PM Intelligence Layer on behalf of {sender_name}.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_or_log(to: list[str], subject: str, body: str, html_body: str | None = None,
+                sender_name: str = "the PM team") -> str:
+    """Send via Gmail SMTP if credentials are set, otherwise log to outputs/email_log.txt.
+
+    If html_body is provided it is sent as the HTML alternative; body is used as plain-text
+    fallback and for logging. For agent-sent emails (no html_body) a signature is appended
+    and the body is wrapped in a minimal branded HTML template.
+    """
     OUTPUTS_DIR.mkdir(exist_ok=True)
     sender = os.getenv("GMAIL_SENDER", "")
     password = os.getenv("GMAIL_APP_PASSWORD", "")
+
+    # Append signature to plain body for agent-sent emails
+    plain_body = body if html_body else body + _SIGNATURE
 
     mode = "SENT" if (sender and password) else "SIMULATED"
     with open(OUTPUTS_DIR / "email_log.txt", "a", encoding="utf-8") as f:
         f.write(
             f"\n{'─' * 60}\n[{mode}] {date.today()}\n"
-            f"TO: {', '.join(to)}\nSUBJECT: {subject}\n{body}\n"
+            f"TO: {', '.join(to)}\nSUBJECT: {subject}\n{plain_body}\n"
         )
 
     if not (sender and password):
         return f"simulated (logged) — Gmail not configured. Recipients: {', '.join(to)}"
 
     try:
-        msg = MIMEMultipart()
+        msg = MIMEMultipart("alternative")
         msg["From"] = sender
         msg["To"] = ", ".join(to)
         msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
+        msg.attach(MIMEText(plain_body, "plain", "utf-8"))
+
+        # Use provided HTML or wrap plain body in branded template
+        final_html = html_body or _AGENT_EMAIL_TEMPLATE.format(
+            body_html=plain_body.replace("\n", "<br>"),
+            sender_name=sender_name,
+        )
+        msg.attach(MIMEText(final_html, "html", "utf-8"))
+
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as srv:
             srv.login(sender, password)
             srv.sendmail(sender, to, msg.as_string())
@@ -106,33 +156,212 @@ def read_inbox(query: str = "ALL", max_results: int = 5) -> list[dict]:
     return results
 
 
-def _artifact_email_body(artifacts: dict[str, str]) -> str:
-    """Build a plain-text email body that includes a summary of each artifact."""
-    LABELS = {
-        "roadmap": "ROADMAP",
-        "key_focus_areas": "KEY FOCUS AREAS",
-        "requirements": "REQUIREMENTS",
-        "success_metrics": "SUCCESS METRICS",
-        "impact_quadrant": "IMPACT QUADRANT",
-    }
-    sections: list[str] = [
-        "Hi team,\n\n"
-        "The PM Assistant has generated an updated set of artefacts for the\n"
-        "Customer App & Checkout Experience charter. Full details below.\n"
-    ]
-    for key, label in LABELS.items():
+_SECTION_COLORS = {
+    "roadmap":        ("#5E17EB", "🗺️"),
+    "key_focus_areas": ("#0EA5E9", "🎯"),
+    "requirements":   ("#10B981", "📋"),
+    "success_metrics": ("#F59E0B", "📊"),
+    "impact_quadrant": ("#EF4444", "🔲"),
+    "rice_score":     ("#8B5CF6", "⚖️"),
+}
+
+_ARTIFACT_LABELS = {
+    "roadmap":        "Roadmap",
+    "key_focus_areas": "Key Focus Areas",
+    "requirements":   "Requirements",
+    "success_metrics": "Success Metrics",
+    "impact_quadrant": "Impact Quadrant",
+    "rice_score":     "RICE Score",
+}
+
+
+def _md_table_to_html(md: str) -> str:
+    """Convert a markdown table block to an HTML table."""
+    rows = [r.strip() for r in md.strip().splitlines() if r.strip().startswith("|")]
+    if not rows:
+        return md
+    html = ['<table style="width:100%;border-collapse:collapse;font-size:13px;margin:8px 0;">']
+    for i, row in enumerate(rows):
+        cells = [c.strip() for c in row.strip("| ").split("|")]
+        if all(set(c) <= set("-: ") for c in cells):
+            continue  # skip separator row
+        tag = "th" if i == 0 else "td"
+        style = (
+            'style="background:#5E17EB;color:#fff;padding:8px 10px;text-align:left;"'
+            if i == 0
+            else 'style="padding:7px 10px;border-bottom:1px solid #f0f0f0;"'
+        )
+        html.append("<tr>" + "".join(f"<{tag} {style}>{c}</{tag}>" for c in cells) + "</tr>")
+    html.append("</table>")
+    return "\n".join(html)
+
+
+def _md_to_html(md: str) -> str:
+    """Convert artifact markdown (tables, bullets, bold, headings) to inline-styled HTML."""
+    # Convert markdown tables first
+    md = re.sub(
+        r"(\|.+\|\n)(\|[-| :]+\|\n)((?:\|.+\|\n?)*)",
+        lambda m: _md_table_to_html(m.group(0)),
+        md,
+    )
+    lines = md.splitlines()
+    out: list[str] = []
+    in_ul = False
+
+    for line in lines:
+        # Already converted table rows — pass through
+        if line.startswith("<t"):
+            if in_ul:
+                out.append("</ul>")
+                in_ul = False
+            out.append(line)
+            continue
+
+        stripped = line.strip()
+
+        # Bullet list
+        if stripped.startswith("- ") or stripped.startswith("* "):
+            if not in_ul:
+                out.append('<ul style="margin:4px 0 8px 16px;padding:0;">')
+                in_ul = True
+            item = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", stripped[2:])
+            out.append(f'<li style="margin:3px 0;">{item}</li>')
+            continue
+
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+
+        # Headings
+        m = re.match(r"^(#{2,4})\s+(.+)", stripped)
+        if m:
+            level = min(len(m.group(1)) + 1, 5)
+            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", m.group(2))
+            out.append(
+                f'<h{level} style="margin:14px 0 4px;color:#333;font-size:{18 - level}px;">{text}</h{level}>'
+            )
+            continue
+
+        # Numbered items
+        m = re.match(r"^\d+\.\s+\*\*(.+?)\*\*(.*)$", stripped)
+        if m:
+            out.append(
+                f'<p style="margin:8px 0 2px;"><strong style="color:#111;">{m.group(1)}</strong>'
+                f'{m.group(2)}</p>'
+            )
+            continue
+
+        # Empty line
+        if not stripped:
+            out.append('<div style="height:6px;"></div>')
+            continue
+
+        # Normal paragraph — apply inline bold
+        text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", stripped)
+        out.append(f'<p style="margin:4px 0;line-height:1.6;">{text}</p>')
+
+    if in_ul:
+        out.append("</ul>")
+
+    return "\n".join(out)
+
+
+def _artifact_email_html(artifacts: dict[str, str]) -> str:
+    """Build a branded HTML email with all artefact sections rendered as styled cards."""
+    sections_html: list[str] = []
+
+    for key, label in _ARTIFACT_LABELS.items():
         content = artifacts.get(key, "").strip()
         if not content:
             continue
-        # Truncate very long sections to keep the email readable
-        preview = content if len(content) <= 1200 else content[:1200] + "\n… (truncated — full version in the app)"
-        sections.append(f"\n{'─' * 50}\n{label}\n{'─' * 50}\n{preview}")
+        color, icon = _SECTION_COLORS.get(key, ("#5E17EB", "📄"))
+        # Truncate very long sections in email
+        if len(content) > 1400:
+            content = content[:1400] + "\n\n*(truncated — full version in the PM Assistant app)*"
+        body_html = _md_to_html(content)
+        sections_html.append(f"""
+        <tr>
+          <td style="padding:0 32px 24px;">
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+              <tr>
+                <td style="background:{color};padding:10px 16px;">
+                  <span style="color:#fff;font-weight:700;font-size:13px;letter-spacing:0.5px;">
+                    {icon}&nbsp; {label.upper()}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:16px;font-size:13px;color:#333;line-height:1.6;background:#fff;">
+                  {body_html}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>""")
 
-    sections.append(
-        "\n\nPlease review and share your inputs with Jaiadithya (Director of Product).\n\n"
-        "— PM Intelligence Layer"
-    )
-    return "\n".join(sections)
+    all_sections = "\n".join(sections_html)
+
+    return f"""\
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0edf8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0edf8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="660" cellpadding="0" cellspacing="0"
+             style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(94,23,235,0.12);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#5E17EB 0%,#7C3AED 100%);padding:28px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <div style="color:#fff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">⚡ Zepto</div>
+                  <div style="color:rgba(255,255,255,0.75);font-size:13px;margin-top:2px;">PM Intelligence Layer</div>
+                </td>
+                <td align="right" valign="middle">
+                  <div style="background:rgba(255,255,255,0.15);border-radius:20px;padding:6px 14px;
+                              color:#fff;font-size:12px;font-weight:600;">
+                    {date.today().strftime("%d %b %Y")}
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Intro -->
+        <tr>
+          <td style="padding:24px 32px 16px;">
+            <p style="margin:0;font-size:15px;color:#333;line-height:1.6;">Hi team,</p>
+            <p style="margin:10px 0 0;font-size:14px;color:#555;line-height:1.7;">
+              Your updated PM artefacts for the <strong>Customer App &amp; Checkout Experience</strong>
+              charter are ready. Review each section below and share your inputs with
+              <strong>Jaiadithya</strong> (Director of Product).
+            </p>
+          </td>
+        </tr>
+
+        <!-- Artifact sections -->
+        {all_sections}
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 32px 28px;background:#fafafa;border-top:1px solid #f0f0f0;">
+            <p style="margin:0;font-size:12px;color:#999;line-height:1.6;">
+              Generated automatically by <strong style="color:#5E17EB;">Zepto PM Intelligence Layer</strong>.
+              This email contains a summary — open the PM Assistant app for full interactive artefacts.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 
 def notify_artifacts_generated(artifacts: dict[str, str]) -> str:
@@ -142,5 +371,10 @@ def notify_artifacts_generated(artifacts: dict[str, str]) -> str:
     if not recipients:
         return "no recipients configured"
     subject = trigger.get("subject", "PM Artifacts Updated").replace("{date}", str(date.today()))
-    body = _artifact_email_body(artifacts)
-    return send_or_log(recipients, subject, body)
+    plain_body = (
+        "Hi team,\n\nYour updated PM artefacts for the Customer App & Checkout Experience "
+        "charter are ready. Please open the PM Assistant app to review them.\n\n"
+        "— Zepto PM Intelligence Layer"
+    )
+    html_body = _artifact_email_html(artifacts)
+    return send_or_log(recipients, subject, plain_body, html_body=html_body)
