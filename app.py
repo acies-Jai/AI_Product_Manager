@@ -1,4 +1,6 @@
+import calendar
 import uuid
+from datetime import datetime
 
 import streamlit as st
 from langgraph.types import Command
@@ -128,6 +130,30 @@ def _parse_metrics_table(content: str) -> list:
     return rows
 
 
+def _parse_timeline_table(content: str) -> list:
+    rows = []
+    lines = [l.strip() for l in content.strip().splitlines() if l.strip().startswith("|")]
+    for i, line in enumerate(lines):
+        if i == 0 or all(c in "-| :" for c in line.replace("|", "")):
+            continue
+        cells = [c.strip() for c in line.strip("| ").split("|")]
+        if len(cells) >= 4:
+            try:
+                start = datetime.strptime(cells[1].strip(), "%b %Y")
+                end_first = datetime.strptime(cells[2].strip(), "%b %Y")
+                last_day = calendar.monthrange(end_first.year, end_first.month)[1]
+                end = datetime(end_first.year, end_first.month, last_day)
+                rows.append({
+                    "initiative": cells[0].strip(),
+                    "start": start,
+                    "end": end,
+                    "phase": cells[3].strip(),
+                })
+            except ValueError:
+                continue
+    return rows
+
+
 # ── Renderers ─────────────────────────────────────────────────────────────────
 
 def _render_quadrant(content: str) -> None:
@@ -179,7 +205,55 @@ def _render_quadrant(content: str) -> None:
             st.markdown(sections.get("deprioritise") or "_No items._")
 
 
-def _render_roadmap(content: str) -> None:
+_PHASE_COLORS = {"Now": "#10B981", "Next": "#F59E0B", "Later": "#6B7280"}
+
+
+def _render_gantt(timeline_content: str) -> None:
+    rows = _parse_timeline_table(timeline_content)
+    if not rows:
+        return
+
+    fig = go.Figure()
+    for row in sorted(rows, key=lambda r: r["start"]):
+        color = _PHASE_COLORS.get(row["phase"], "#5E17EB")
+        duration_ms = (row["end"] - row["start"]).total_seconds() * 1000
+        fig.add_trace(go.Bar(
+            name=row["phase"],
+            y=[row["initiative"]],
+            x=[duration_ms],
+            base=[row["start"].strftime("%Y-%m-%d")],
+            orientation="h",
+            marker_color=color,
+            marker_line_width=0,
+            showlegend=False,
+            hovertemplate=(
+                f"<b>{row['initiative']}</b><br>"
+                f"{row['start'].strftime('%b %Y')} → {row['end'].strftime('%b %Y')}<br>"
+                f"Phase: {row['phase']}<extra></extra>"
+            ),
+        ))
+    fig.update_layout(
+        barmode="overlay",
+        height=max(280, len(rows) * 50),
+        margin=dict(l=0, r=20, t=10, b=30),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis=dict(type="date", showgrid=True, gridcolor="#F0EAFF", tickformat="%b %Y"),
+        yaxis=dict(autorange="reversed"),
+        font=dict(family="sans-serif", size=13),
+    )
+    st.markdown("#### Delivery Timeline")
+    legend_html = " ".join(
+        f'<span style="background:{c}20; color:{c}; border:1px solid {c}40; '
+        f'border-radius:12px; padding:3px 10px; font-size:12px; font-weight:600;">'
+        f'{p}</span>'
+        for p, c in _PHASE_COLORS.items()
+    )
+    st.markdown(f'<div style="margin-bottom:8px;">{legend_html}</div>', unsafe_allow_html=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+def _render_roadmap(content: str, timeline_content: str | None = None) -> None:
     data = _parse_roadmap(content)
     if not any(data.values()):
         st.markdown(content)
@@ -207,6 +281,9 @@ def _render_roadmap(content: str) -> None:
                 {cards_html}
             </div>
             """, unsafe_allow_html=True)
+    if timeline_content:
+        st.markdown("---")
+        _render_gantt(timeline_content)
 
 
 def _render_rice(content: str) -> None:
@@ -478,7 +555,7 @@ if artifacts:
             elif key == "impact_quadrant":
                 _render_quadrant(content)
             elif key == "roadmap":
-                _render_roadmap(content)
+                _render_roadmap(content, artifacts.get("roadmap_timeline"))
             elif key == "rice_score":
                 _render_rice(content)
             elif key == "success_metrics":

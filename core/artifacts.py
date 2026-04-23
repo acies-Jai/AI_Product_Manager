@@ -47,13 +47,23 @@ Columns: Initiative | Reach (users/week, 1–1000) | Impact (0.25 / 0.5 / 1 / 2 
 RICE Score = (Reach × Impact × Confidence%) ÷ Effort. Round to 1 decimal place. Sort rows by RICE Score descending.
 Use only initiatives already listed in the Roadmap — do not invent new ones. Derive estimates from the org context.
 
+===ROADMAP_TIMELINE===
+Markdown table mapping every initiative in the Roadmap to a delivery window.
+Columns: Initiative | Start | End | Phase
+Rules:
+- Start and End must be month-year strings exactly in the format "Mon YYYY" (e.g. "Apr 2026", "Sep 2026").
+- Phase must be exactly one of: Now, Next, or Later — matching the Roadmap column above.
+- Derive Start and End from the pod availability windows, sprint calendar, and capacity constraints in the context. Do not invent dates.
+- Every initiative that appears in the Roadmap must have exactly one row here.
+
 ===END===
 
 Replace the description under each delimiter with the actual content. No extra text outside the delimiters."""
 
-_SECTIONS = ["roadmap", "key_focus_areas", "requirements", "success_metrics", "impact_quadrant", "rice_score"]
+_SECTIONS = ["roadmap", "key_focus_areas", "requirements", "success_metrics", "impact_quadrant", "rice_score", "roadmap_timeline"]
 _DELIMITERS = ["===ROADMAP===", "===KEY_FOCUS_AREAS===", "===REQUIREMENTS===",
-               "===SUCCESS_METRICS===", "===IMPACT_QUADRANT===", "===RICE_SCORE===", "===END==="]
+               "===SUCCESS_METRICS===", "===IMPACT_QUADRANT===", "===RICE_SCORE===",
+               "===ROADMAP_TIMELINE===", "===END==="]
 
 _QUAD_KEYS = ["quick_wins", "major_bets", "low_hanging", "deprioritise"]
 _QUAD_DELIMS = ["--QUICK_WINS--", "--MAJOR_BETS--", "--LOW_HANGING--", "--DEPRIORITISE--", "--END_QUADRANT--"]
