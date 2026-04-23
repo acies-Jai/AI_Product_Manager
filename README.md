@@ -98,19 +98,51 @@ access control in action — Finance data is only visible to PM, Finance, and Le
 
 ---
 
-## Optional: API server (for programmatic access / testing)
+## Testing without the frontend (API server)
+
+You can verify the entire system — RAG, chat, RBAC, document updates, artifact generation — without opening a browser. Start the FastAPI backend:
 
 ```bash
 python -m uvicorn server:app --port 8502
 ```
 
-Endpoints:
-- `GET  /health` — check status and chunk count
-- `POST /index` — re-index all documents
-- `POST /chat` — send a message `{"message": "...", "role": "...", "thread_id": "..."}`
-- `POST /confirm` — confirm or cancel a pending file write `{"thread_id": "...", "confirmed": true}`
-- `POST /generate-artifacts` — generate and save artefacts
-- `GET  /artifacts` — retrieve saved artefacts
+Then run through the core scenarios with curl:
+
+```bash
+# 1. Check the server is up and documents are indexed
+curl http://localhost:8502/health
+
+# 2. Index documents
+curl -s -X POST http://localhost:8502/index | python -m json.tool
+
+# 3. Chat as Product Manager (full access)
+curl -s -X POST http://localhost:8502/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"What is the H1 FY26 budget allocation?","role":"Product Manager"}' \
+  | python -m json.tool
+
+# 4. Chat as Design (restricted — should be denied budget data)
+curl -s -X POST http://localhost:8502/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"What is the H1 FY26 budget allocation?","role":"Design"}' \
+  | python -m json.tool
+
+# 5. Generate all six PM artefacts
+curl -s -X POST http://localhost:8502/generate-artifacts | python -m json.tool
+```
+
+For the full command reference — multi-turn conversations, document update with confirm/cancel, inbox, and expected outputs — see [`system_guide/12_api_testing_guide.md`](system_guide/12_api_testing_guide.md).
+
+**Endpoints at a glance:**
+
+| Method | Path | What it does |
+|--------|------|-------------|
+| `GET`  | `/health` | Server status + chunk count |
+| `POST` | `/index` | Re-index all `inputs/` documents |
+| `POST` | `/chat` | Send a message; returns reply + tool events |
+| `POST` | `/confirm` | Confirm or cancel a pending file write |
+| `POST` | `/generate-artifacts` | Generate and save all six artefacts |
+| `GET`  | `/artifacts` | Retrieve the saved artefacts |
 
 ---
 
