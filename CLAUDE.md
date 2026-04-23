@@ -8,23 +8,31 @@ Zepto PM Assistant — an agentic AI assistant for Product Managers at Zepto. It
 
 **LLM Provider:** Groq (`llama-3.3-70b-versatile`)  
 **Vector DB:** ChromaDB (persistent in `.chroma/`)  
-**UI:** Streamlit
+**Frontend:** React 18 + TypeScript + Vite + Tailwind CSS (in `frontend/`)  
+**Backend API:** FastAPI (`server.py`) on port 8502
 
 ## Setup & Running
 
 ```bash
-# Install dependencies
+# 1. Install Python dependencies
 pip install -r requirements.txt
 
-# Configure environment (required: GROQ_API_KEY)
+# 2. Configure environment (required: GROQ_API_KEY)
 cp .env.example .env
 
-# Start the app
-streamlit run app.py
-# Available at http://localhost:8501
+# 3. Start the FastAPI backend
+python -m uvicorn server:app --port 8502
+
+# 4. In a second terminal — install and start the React frontend
+cd frontend
+npm install
+npm run dev
+# Opens at http://localhost:5173
 ```
 
 Optional env vars: `GMAIL_SENDER`, `GMAIL_APP_PASSWORD` — if absent, emails are logged to `outputs/email_log.txt` instead of sent.
+
+> `app.py` (Streamlit) is retained as a fallback reference but is no longer the primary UI. `streamlit` and `plotly` are not in `requirements.txt`.
 
 ## Architecture
 
@@ -137,19 +145,41 @@ CORS is enabled for `localhost:5173` (Vite) and `localhost:3000` (React/Next.js)
 
 **SSE stream format** (`/chat/stream`): each event is `data: {"node": "<name>", "updates": {...}, "thread_id": "..."}`. Final event has `"node": "__done__"`.
 
-### UI: `app.py`
+### Frontend: `frontend/`
 
-Global theme: light purple app background (`#F4F0FC`), white card surfaces for the tab panel, role selector, chat messages, and status/expander widgets. All CSS injected via `st.markdown(..., unsafe_allow_html=True)` immediately after `st.set_page_config`.
+React 18 + TypeScript + Vite app. Run with `npm run dev` from the `frontend/` directory.
 
-Key rendering functions:
-- `_render_roadmap(content, timeline_content)` — Now/Next/Later Kanban + optional Plotly Gantt below
-- `_render_gantt(timeline_content)` — horizontal bar chart with date axis, colour-coded by phase
-- `_render_rice(content)` — horizontal Plotly bar chart with RICE scores, collapsible raw table
-- `_render_metrics(content)` — custom HTML table with owner pill badges
-- `_render_quadrant(content)` — 2×2 grid of bordered containers
-- `_tao_step(icon, color, label, detail)` — returns HTML for one step in the vertical timeline shown inside `st.status` during streaming
+**Stack:** React 18, TypeScript, Tailwind CSS (Zepto colour tokens in `tailwind.config.js`), Zustand for state, Recharts for charts, Lucide React for icons.
 
-`_ARTIFACT_KEYS` constant controls which artifact keys count toward the 6/6 status bar (excludes `roadmap_timeline` which is data-only).
+**Dev proxy:** Vite proxies `/api/*` → `http://localhost:8502` so all API calls use the relative `/api` base without CORS issues.
+
+**Key files:**
+- `src/types.ts` — all shared types (`Message`, `TaoStep`, `PendingWrite`, `Artifacts`) + `ROLE_CONFIG`, `ARTIFACT_KEYS`, `ARTIFACT_LABELS` constants
+- `src/api.ts` — typed wrappers for every backend endpoint; `streamChat()` is an async generator over the SSE stream
+- `src/store.ts` — Zustand store; single source of truth for `artifacts`, `messages`, `taoSteps`, `pendingWrite`, `role`, loading flags
+- `src/App.tsx` — root layout: Sidebar (left) + TopBar/ArtifactPanel (centre) + ChatPanel (right)
+
+**Component structure:**
+```
+components/
+  Sidebar.tsx          — index/generate controls, file list, notify button
+  TopBar.tsx           — hero header + status bar
+  RoleSelector.tsx     — role dropdown with coloured badge
+  ArtifactPanel.tsx    — tab switcher, delegates to artifact components
+  ChatPanel.tsx        — message list, chat input, TaoStepper while streaming
+  TaoStepper.tsx       — vertical timeline of graph node steps during a response
+  PendingWriteCard.tsx — confirm/cancel panel for staged file writes
+  StatusBar.tsx        — chunks / files / artifacts count strip
+  Hero.tsx             — gradient banner
+  artifacts/
+    RoadmapTab.tsx     — Now/Next/Later Kanban + Recharts Gantt timeline
+    RiceTab.tsx        — horizontal Recharts bar chart + raw table toggle
+    MetricsTab.tsx     — styled table with owner pill badges
+    QuadrantTab.tsx    — 2×2 impact/effort grid
+    KeyFocusTab.tsx    — numbered focus areas
+    RequirementsTab.tsx — requirements / scope / spec sections
+    StyledTable.tsx    — reusable markdown table → HTML table renderer
+```
 
 ## System Documentation
 

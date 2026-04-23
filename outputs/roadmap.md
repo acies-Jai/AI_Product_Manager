@@ -1,3 +1,3 @@
 | Now | Next | Later |
 | --- | --- | --- |
-| Automated refund processing for orders <₹500, Proactive WhatsApp/SMS alert when ETA changes by >5 min, Streamlined first-order flow | Personalised home screen, Smart search with regional language + typo tolerance, Reduce payment failure rate | Reactivation nudges based on purchase history, Bulk action tools for handling surge periods, Improve order tracking for agents to see real-time dark store status |
+| 1-click reorder, Proactive ETA alerts, Fix search 0-result rate | Checkout flow redesign, Automated refunds for small orders, Real-time packing status | Personalised home screen, Real-time inventory display, Streamlined first-order flow |

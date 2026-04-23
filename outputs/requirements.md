@@ -1,23 +1,15 @@
 ### Requirements
-Stakeholders need:
-* Automated refund processing for orders <₹500
-* Proactive WhatsApp/SMS alert when ETA changes by >5 min
-* Streamlined first-order flow
-* Personalised home screen
-* Smart search with regional language + typo tolerance
+* Automate refund processing for orders < ₹500
+* Implement proactive ETA alerts for customers
+* Enhance search relevance for regional language queries
+* Redesign checkout flow to reduce drop-offs
+* Implement real-time packing status for customers
 ### Scope
-In scope:
-* Automation of refund processing
-* Development of proactive alert system
-* Streamlining of first-order flow
-* Personalization of home screen
-* Improvement of search functionality
-Out of scope:
-* Development of new features not listed in the roadmap
+In: Checkout flow redesign, automated refunds, search relevance enhancements, proactive ETA alerts, real-time packing status
+Out: New features that require significant engineering effort or resources
 ### Final Specification
-Acceptance criteria:
-* Automated refund processing: 90% of orders <₹500 are processed automatically
-* Proactive alert system: 95% of customers receive alerts when ETA changes by >5 min
-* Streamlined first-order flow: 20% reduction in first-order flow steps
-* Personalised home screen: 15% increase in user engagement
-* Smart search: 10% reduction in search abandonment
+* Automated refund processing: Refunds for orders < ₹500 are processed automatically, with customers receiving updates via SMS/WhatsApp
+* Proactive ETA alerts: Customers receive proactive alerts when their ETA changes by > 5 minutes
+* Search relevance enhancements: Search results for regional language queries return relevant results, with a 0-result rate below 12%
+* Checkout flow redesign: The checkout flow is redesigned to reduce drop-offs, with a minimum of 3 unnecessary steps removed
+* Real-time packing status: Customers can view real-time packing status for their orders

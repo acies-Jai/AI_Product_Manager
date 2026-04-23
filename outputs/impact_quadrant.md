@@ -1,14 +1,16 @@
 --QUICK_WINS--
-* Automated refund processing for orders <₹500
-* Proactive WhatsApp/SMS alert when ETA changes by >5 min
-* Streamlined first-order flow
+* Implementing proactive ETA alerts to reduce late delivery tickets
+* Enhancing search relevance to reduce 0-result rate
+* Automating refund processing for small orders to reduce refund resolution time
 --MAJOR_BETS--
-* Personalised home screen
-* Smart search with regional language + typo tolerance
-* Reactivation nudges based on purchase history
+* Redesigning the checkout flow to reduce drop-offs and improve OCR
+* Implementing real-time packing status to enhance customer experience
+* Developing a personalised home screen to increase order rate
 --LOW_HANGING--
-* Improve order tracking for agents to see real-time dark store status
-* Bulk action tools for handling surge periods
+* Fixing app crashes and bugs to improve customer satisfaction
+* Enhancing push notification copy to improve customer engagement
+* Streamlining the first-order flow to reduce drop-offs
 --DEPRIORITISE--
-* Development of new features not listed in the roadmap
+* Developing a new feature for win-back flow, given the current focus on core conversion improvements
+* Implementing a new referral program, given the current focus on reducing subsidy burn
 --END_QUADRANT--

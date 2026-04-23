@@ -58,11 +58,23 @@ GMAIL_APP_PASSWORD=abcdabcdabcdabcd  # optional (no spaces)
 
 ## Running the app
 
+Two terminals needed — the FastAPI backend and the React frontend.
+
+**Terminal 1 — Backend:**
 ```bash
-streamlit run app.py
+python -m uvicorn server:app --port 8502
 ```
 
-Opens at **http://localhost:8501**
+**Terminal 2 — Frontend:**
+```bash
+cd frontend
+npm install   # first time only
+npm run dev
+```
+
+Opens at **http://localhost:5173**
+
+> The Streamlit app (`streamlit run app.py`) still works as a fallback but is no longer the primary UI. `streamlit` is not in `requirements.txt` — install it separately if needed.
 
 ---
 

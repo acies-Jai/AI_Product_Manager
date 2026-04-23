@@ -4,3 +4,8 @@ __pycache__/
 *.pyc
 outputs/chat_log.txt
 outputs/email_log.txt
+
+# React frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
