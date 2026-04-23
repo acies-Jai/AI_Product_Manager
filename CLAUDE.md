@@ -80,7 +80,9 @@ Role permissions are defined in `config/access_config.yaml`. `finance.md` and `s
 
 ### Artifact Generation: `core/artifacts.py`
 
-Triggered by ⚡ Generate Artifacts button. Runs 8 hardcoded semantic queries against the vector store, deduplicates chunks, sends to Groq with a structured prompt, and parses 6 artifacts using delimiter tokens (`===ROADMAP===`, `===KEY_FOCUS_AREAS===`, `===RICE_SCORE===`, etc.). Saves to `outputs/` and sends notification emails. `load_saved_artifacts()` reloads them on app startup so tabs render without re-generating.
+Triggered by ⚡ Generate Artifacts button. Runs 8 hardcoded semantic queries against the vector store, deduplicates chunks, sends to Groq with a structured prompt, and parses 7 artifacts using delimiter tokens (`===ROADMAP===`, `===KEY_FOCUS_AREAS===`, `===RICE_SCORE===`, `===ROADMAP_TIMELINE===`, etc.). Saves to `outputs/`. `load_saved_artifacts()` reloads them on app startup.
+
+Email notification is **decoupled** — a separate 📧 Notify Team button in the sidebar (and `POST /notify-team` API) sends the email when the PM chooses, not automatically on generation.
 
 ### File Operations: `core/files.py`
 
@@ -111,6 +113,44 @@ Triggered by ⚡ Generate Artifacts button. Runs 8 hardcoded semantic queries ag
 4. **MemorySaver is in-memory** — history lost on server restart; migrate to `SqliteSaver` for persistence
 5. **Single pending_write at a time** — only one file change can be staged per turn
 
+### API Server: `server.py`
+
+FastAPI server for programmatic access and custom frontend integration.
+
+```bash
+python -m uvicorn server:app --port 8502
+```
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET`  | `/health` | Status + chunk count |
+| `GET`  | `/files` | File list + indexed flag |
+| `POST` | `/index` | Re-index all inputs |
+| `POST` | `/chat` | Synchronous chat; returns full reply |
+| `POST` | `/chat/stream` | SSE streaming — yields one JSON event per graph node as it completes |
+| `POST` | `/confirm` | Confirm/cancel a pending file write |
+| `POST` | `/generate-artifacts` | Generate artifacts; pass `?notify=true` to also email |
+| `POST` | `/notify-team` | Email the saved artifacts without regenerating |
+| `GET`  | `/artifacts` | Retrieve saved artifact content |
+
+CORS is enabled for `localhost:5173` (Vite) and `localhost:3000` (React/Next.js) to support a custom frontend.
+
+**SSE stream format** (`/chat/stream`): each event is `data: {"node": "<name>", "updates": {...}, "thread_id": "..."}`. Final event has `"node": "__done__"`.
+
+### UI: `app.py`
+
+Global theme: light purple app background (`#F4F0FC`), white card surfaces for the tab panel, role selector, chat messages, and status/expander widgets. All CSS injected via `st.markdown(..., unsafe_allow_html=True)` immediately after `st.set_page_config`.
+
+Key rendering functions:
+- `_render_roadmap(content, timeline_content)` — Now/Next/Later Kanban + optional Plotly Gantt below
+- `_render_gantt(timeline_content)` — horizontal bar chart with date axis, colour-coded by phase
+- `_render_rice(content)` — horizontal Plotly bar chart with RICE scores, collapsible raw table
+- `_render_metrics(content)` — custom HTML table with owner pill badges
+- `_render_quadrant(content)` — 2×2 grid of bordered containers
+- `_tao_step(icon, color, label, detail)` — returns HTML for one step in the vertical timeline shown inside `st.status` during streaming
+
+`_ARTIFACT_KEYS` constant controls which artifact keys count toward the 6/6 status bar (excludes `roadmap_timeline` which is data-only).
+
 ## System Documentation
 
-See `SYSTEM_GUIDE.md` for a full end-to-end explanation of all system layers, data flow diagrams, RBAC details, hallucination guards, and a 10-question FAQ for demos and onboarding.
+See `system_guide/` for topic-by-topic documentation. `system_guide/12_api_testing_guide.md` has complete curl commands for every endpoint.

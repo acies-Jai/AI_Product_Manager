@@ -26,9 +26,22 @@ st.set_page_config(page_title="Zepto PM Assistant", layout="wide", page_icon="�
 
 st.markdown("""
 <style>
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header[data-testid="stHeader"] {
+    background: #F4F0FC !important;
+    box-shadow: none !important;
+    border-bottom: none !important;
+}
+.stApp { background: #F4F0FC; }
 .block-container { padding-top: 1.5rem; padding-bottom: 2rem; max-width: 1100px; }
 
+/* ── Tab card surface ── */
+[data-testid="stTabs"] {
+    background: white; border-radius: 16px; padding: 20px;
+    border: 1px solid #EDE9FF; box-shadow: 0 2px 12px rgba(94,23,235,0.06);
+    margin-bottom: 16px;
+}
 .stTabs [data-baseweb="tab-list"] {
     gap: 6px; background: #F0EAFF; padding: 6px; border-radius: 12px;
 }
@@ -37,6 +50,7 @@ st.markdown("""
 }
 .stTabs [aria-selected="true"] { background: #5E17EB !important; color: white !important; }
 
+/* ── Buttons ── */
 .stButton > button[kind="primary"] {
     background: linear-gradient(135deg, #5E17EB, #7C3AED);
     border: none; border-radius: 8px; font-weight: 600;
@@ -46,15 +60,53 @@ st.markdown("""
     transform: translateY(-1px); box-shadow: 0 4px 12px rgba(94,23,235,0.4);
 }
 
+/* ── Sidebar ── */
 [data-testid="stSidebar"] { background: #1A0533; }
-[data-testid="stSidebar"] * { color: #E5D9FF !important; }
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] div,
+[data-testid="stSidebar"] label { color: #E5D9FF !important; }
 [data-testid="stSidebar"] .stButton > button {
     background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
     border-radius: 8px; color: white !important;
 }
 [data-testid="stSidebar"] .stButton > button:hover { background: rgba(255,255,255,0.15); }
 
-[data-testid="stChatMessage"] { border-radius: 12px; margin-bottom: 8px; }
+
+/* ── Selectbox — hide default label, clean up border ── */
+[data-testid="stSelectbox"] label { display: none; }
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    border-radius: 10px !important; border-color: #EDE9FF !important;
+    background: white !important; font-size: 14px !important;
+    box-shadow: 0 1px 4px rgba(94,23,235,0.06) !important;
+}
+
+/* ── Chat messages ── */
+[data-testid="stChatMessage"] {
+    border-radius: 12px; margin-bottom: 8px;
+    background: white; border: 1px solid #EDE9FF;
+}
+
+/* ── Chat input bar ── */
+[data-testid="stChatInput"] {
+    border-radius: 12px !important; border-color: #EDE9FF !important;
+    box-shadow: 0 2px 8px rgba(94,23,235,0.08) !important;
+}
+
+/* ── st.status widget ── */
+[data-testid="stStatusWidget"] {
+    border-radius: 10px !important; border-color: #EDE9FF !important;
+    background: white !important;
+}
+
+/* ── Remove default st.divider look ── */
+hr { border-color: #EDE9FF !important; }
+
+/* ── Expander (used for search previews) ── */
+[data-testid="stExpander"] {
+    border-radius: 8px !important; border-color: #EDE9FF !important;
+    background: white !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -472,7 +524,7 @@ st.markdown(f"""
     <div>
         <div style="color:rgba(255,255,255,0.7); font-size:12px; font-weight:600;
                     letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">
-            ⚡ ZEPTO — PM INTELLIGENCE LAYER
+            ⚡ ZEPTO — INSIGHTS ON DEMAND
         </div>
         <div style="color:white; font-size:26px; font-weight:800; line-height:1.2;">
             Product Manager Assistant
@@ -481,30 +533,44 @@ st.markdown(f"""
             Charter: Customer App &amp; Checkout Experience
         </div>
     </div>
-    <div style="text-align:right;">
+    <div style="text-align:right; display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
         <div style="background:rgba(255,255,255,0.15); border-radius:20px; padding:8px 16px;
                     color:white; font-size:12px; font-weight:600;">
-            {vs.count()} chunks indexed
+            🗄️ {vs.count()} sources live
+        </div>
+        <div style="color:rgba(255,255,255,0.55); font-size:11px; font-weight:500;
+                    letter-spacing:0.5px;">
+            Insights delivered in seconds
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # Status bar
-artifacts_count = len([k for k, v in st.session_state.artifacts.items() if v])
+_ARTIFACT_KEYS = {"roadmap", "key_focus_areas", "requirements", "success_metrics", "impact_quadrant", "rice_score"}
+artifacts_count = sum(1 for k in _ARTIFACT_KEYS if st.session_state.artifacts.get(k))
 status_color = "#10B981" if artifacts_count == 6 else "#F59E0B"
-status_label = "✓ Ready" if artifacts_count == 6 else "⚠ Index &amp; generate to begin"
+status_label = "⚡ All insights delivered" if artifacts_count == 6 else "○ Awaiting dispatch"
 st.markdown(f"""
-<div style="display:flex; gap:24px; background:#F0EAFF; border-radius:10px;
-            padding:10px 20px; margin-bottom:16px; font-size:12px; flex-wrap:wrap; align-items:center;">
-    <span>🗄️ <strong>{vs.count()}</strong> chunks indexed</span>
-    <span>📄 <strong>{len(docs)}</strong> input files</span>
-    <span>📊 <strong>{artifacts_count}/6</strong> artefacts generated</span>
+<div style="display:flex; gap:24px; background:white; border-radius:10px;
+            padding:10px 20px; margin-bottom:16px; font-size:12px; flex-wrap:wrap;
+            align-items:center; border:1px solid #EDE9FF;
+            box-shadow:0 1px 4px rgba(94,23,235,0.05);">
+    <span>🗄️ <strong>{vs.count()}</strong> sources indexed</span>
+    <span>📄 <strong>{len(docs)}</strong> knowledge files</span>
+    <span>📊 <strong>{artifacts_count}/6</strong> artefacts ready</span>
     <span style="color:{status_color}; font-weight:600;">{status_label}</span>
 </div>
 """, unsafe_allow_html=True)
 
 # Role selector
+st.markdown("""
+<div style="background:white; border-radius:12px; padding:16px 20px; margin-bottom:16px;
+            border:1px solid #EDE9FF; box-shadow:0 1px 6px rgba(94,23,235,0.05);">
+    <div style="font-size:11px; font-weight:700; color:#9CA3AF; text-transform:uppercase;
+                letter-spacing:1.5px; margin-bottom:8px;">Viewing as</div>
+""", unsafe_allow_html=True)
+
 role = st.selectbox(
     "Who are you?",
     ["Product Manager", "Customer Experience (CS)", "Growth & Marketing", "Finance",
@@ -515,23 +581,29 @@ role = st.selectbox(
 _levels = allowed_levels(role)
 r_color, r_icon, r_access = ROLE_CONFIG.get(role, ("#9CA3AF", "👥", "Public only"))
 st.markdown(f"""
-<div style="display:flex; align-items:center; gap:10px; margin-top:4px; margin-bottom:16px;">
-    <span style="background:{r_color}20; color:{r_color}; border:1px solid {r_color}40;
-                 border-radius:20px; padding:4px 14px; font-size:13px; font-weight:600;">
-        {r_icon} {role}
-    </span>
-    <span style="color:#888; font-size:12px;">{r_access}</span>
+    <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+        <span style="background:{r_color}20; color:{r_color}; border:1px solid {r_color}40;
+                     border-radius:20px; padding:4px 14px; font-size:13px; font-weight:600;">
+            {r_icon} {role}
+        </span>
+        <span style="color:#9CA3AF; font-size:12px;">{r_access}</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-st.divider()
+st.markdown('<div style="height:1px; background:linear-gradient(90deg,#EDE9FF,transparent); margin:12px 0 20px 0;"></div>', unsafe_allow_html=True)
 
 # ── Stale artifacts banner ────────────────────────────────────────────────────
 
 if st.session_state.stale_artifacts and st.session_state.artifacts:
-    col_warn, col_btn = st.columns([3, 1])
+    col_warn, col_btn = st.columns([4, 1])
     with col_warn:
-        st.warning("📊 Input data changed — artifacts are outdated.")
+        st.markdown("""
+        <div style="background:white; border:1px solid #FEF3C7; border-left:4px solid #F59E0B;
+                    border-radius:10px; padding:12px 16px; font-size:13px; color:#92400E; font-weight:500;">
+            📊 Input data changed — artefacts are outdated and should be regenerated
+        </div>
+        """, unsafe_allow_html=True)
     with col_btn:
         if st.button("↻ Regenerate", use_container_width=True):
             with st.spinner("Regenerating artefacts…"):
@@ -544,7 +616,7 @@ if st.session_state.stale_artifacts and st.session_state.artifacts:
 
 artifacts: dict = st.session_state.artifacts
 
-if artifacts:
+if any(artifacts.get(k) for k in _ARTIFACT_KEYS):
     tab_labels = ["Roadmap", "Key Focus Areas", "Requirements", "Success Metrics", "Impact Quadrant", "RICE Score"]
     keys = ["roadmap", "key_focus_areas", "requirements", "success_metrics", "impact_quadrant", "rice_score"]
     tabs = st.tabs(tab_labels)
@@ -552,7 +624,12 @@ if artifacts:
         with tab:
             content = artifacts.get(key)
             if not content:
-                st.info(f"No content available for {label}.")
+                st.markdown(f"""
+                <div style="background:#F8F5FF; border-radius:10px; padding:24px;
+                            text-align:center; color:#888; font-size:13px;">
+                    No content available for {label} yet — generate artefacts to populate this tab.
+                </div>
+                """, unsafe_allow_html=True)
             elif key == "impact_quadrant":
                 _render_quadrant(content)
             elif key == "roadmap":
@@ -577,13 +654,15 @@ else:
         ]
     )
     st.markdown(f"""
-    <div style="text-align:center; padding:60px 20px;">
+    <div style="background:white; border-radius:16px; border:1px solid #EDE9FF;
+                box-shadow:0 2px 12px rgba(94,23,235,0.06);
+                text-align:center; padding:60px 20px;">
         <div style="font-size:48px; margin-bottom:12px;">⚡</div>
         <div style="font-size:20px; font-weight:700; color:#1A0533; margin-bottom:8px;">
-            Ready to generate your PM artefacts
+            Your insights are one tap away
         </div>
-        <div style="color:#888; font-size:14px; margin-bottom:32px;">
-            Follow these steps in the sidebar to get started
+        <div style="color:#9CA3AF; font-size:14px; margin-bottom:32px;">
+            Dispatch your intelligence layer in 3 steps
         </div>
         <div style="display:flex; justify-content:center; gap:24px; flex-wrap:wrap;">
             {steps_html}
@@ -591,12 +670,19 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-st.divider()
-
-# ── Live Communication Window ─────────────────────────────────────────────────
-
-st.subheader("Live Communication Window")
-st.caption("Open to all departments. The agent searches the knowledge base before responding.")
+st.markdown("""
+<div style="display:flex; align-items:center; gap:12px; margin:28px 0 4px 0;">
+    <div style="width:3px; height:22px; background:linear-gradient(180deg,#5E17EB,#9F67FA);
+                border-radius:2px;"></div>
+    <div style="font-size:17px; font-weight:800; color:#1A0533; letter-spacing:-0.3px;">
+        Live Intelligence Feed
+    </div>
+    <div style="flex:1; height:1px; background:linear-gradient(90deg,#EDE9FF,transparent);
+                margin-left:4px;"></div>
+</div>
+<div style="font-size:13px; color:#9CA3AF; margin-bottom:14px; padding-left:15px;">
+    Ask anything — insights sourced from your knowledge base and delivered in seconds.
+</div>""", unsafe_allow_html=True)
 
 # ── Pending write confirmation ────────────────────────────────────────────────
 
@@ -697,7 +783,7 @@ for msg in st.session_state.messages:
 
 # ── Chat input ────────────────────────────────────────────────────────────────
 
-prompt = st.chat_input("Type your message…")
+prompt = st.chat_input("Ask anything — insight delivered in seconds")
 
 if prompt:
     if vs.count() == 0:
@@ -732,13 +818,29 @@ if prompt:
         final_result: dict = {}
 
         _TAO_TYPE = {
-            "search":       ("🔍", "#0EA5E9", "Search"),
-            "email":        ("📧", "#10B981", "Email sent"),
-            "inbox":        ("📬", "#F59E0B", "Inbox read"),
-            "write_staged": ("✏️", "#8B5CF6", "Change staged"),
+            "search":       ("🔍", "#0EA5E9", "Dispatching query"),
+            "email":        ("📧", "#10B981", "Delivering message"),
+            "inbox":        ("📬", "#F59E0B", "Checking inbox"),
+            "write_staged": ("✏️", "#8B5CF6", "Staging change"),
         }
 
-        with st.status("🤔 Thinking…", expanded=True) as tao_status:
+        def _tao_step(icon: str, color: str, label: str, detail: str) -> str:
+            return f"""
+            <div style="display:flex; align-items:flex-start; gap:10px;
+                        border-left:2px solid {color}40; padding-left:14px;
+                        margin:0 0 0 5px; padding-top:4px; padding-bottom:10px; position:relative;">
+                <div style="position:absolute; left:-5px; top:8px; width:8px; height:8px;
+                            border-radius:50%; background:{color};
+                            box-shadow:0 0 0 3px {color}20;"></div>
+                <div>
+                    <div style="font-size:12px; font-weight:700; color:{color};">
+                        {icon} {label}
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-top:2px;">{detail}</div>
+                </div>
+            </div>"""
+
+        with st.status("⚡ On it…", expanded=True) as tao_status:
             for event in graph.stream(input_state, _graph_config(), stream_mode="updates"):
                 for node_name, updates in event.items():
                     if node_name == "__start__":
@@ -746,66 +848,44 @@ if prompt:
 
                     elif node_name == "classify_intent":
                         intent = updates.get("intent", "general_chat")
-                        tao_status.update(label=f"💭 Intent: `{intent}`")
-                        st.markdown(f"""
-                        <div style="display:inline-flex; align-items:center; gap:6px;
-                                    background:#0EA5E915; border:1px solid #0EA5E930;
-                                    border-radius:20px; padding:4px 12px; margin:3px 0; font-size:12px;">
-                            💭 <strong style="color:#0EA5E9;">Classify</strong>
-                            <span style="color:#666;">— intent: {intent}</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        tao_status.update(label=f"⚡ Routing · {intent}")
+                        st.markdown(_tao_step(
+                            "🧾", "#0EA5E9", "Order received",
+                            f"intent classified as {intent}"
+                        ), unsafe_allow_html=True)
 
                     elif node_name == "retrieve_context":
                         ctx = updates.get("retrieved_context") or []
                         if ctx:
                             sources = list(dict.fromkeys(r["file"] for r in ctx))
-                            st.markdown(f"""
-                            <div style="display:inline-flex; align-items:center; gap:6px;
-                                        background:#8B5CF615; border:1px solid #8B5CF630;
-                                        border-radius:20px; padding:4px 12px; margin:3px 0; font-size:12px;">
-                                📚 <strong style="color:#8B5CF6;">Pre-fetch</strong>
-                                <span style="color:#666;">— {len(ctx)} chunks from {', '.join(sources)}</span>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(_tao_step(
+                                "📦", "#8B5CF6", "Packing context",
+                                f"{len(ctx)} chunks sourced from {', '.join(sources)}"
+                            ), unsafe_allow_html=True)
                         else:
-                            st.markdown("""
-                            <div style="display:inline-flex; align-items:center; gap:6px;
-                                        background:#8B5CF615; border:1px solid #8B5CF630;
-                                        border-radius:20px; padding:4px 12px; margin:3px 0; font-size:12px;">
-                                📚 <strong style="color:#8B5CF6;">Pre-fetch</strong>
-                                <span style="color:#666;">— skipped for this intent</span>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(_tao_step(
+                                "📦", "#8B5CF6", "Packing context",
+                                "skipped — direct response"
+                            ), unsafe_allow_html=True)
 
                     elif node_name == "generate_response":
                         events = updates.get("tool_events") or []
                         for e in events:
                             ico_, c_, lbl_ = _TAO_TYPE.get(e["type"], ("⚡", "#5E17EB", e["type"]))
-                            detail_short = e["detail"][:60]
-                            st.markdown(f"""
-                            <div style="display:inline-flex; align-items:center; gap:6px;
-                                        background:{c_}15; border:1px solid {c_}30;
-                                        border-radius:20px; padding:4px 12px; margin:3px 0; font-size:12px;">
-                                {ico_} <strong style="color:{c_};">{lbl_}</strong>
-                                <span style="color:#666;">— {detail_short}</span>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(_tao_step(
+                                ico_, c_, lbl_, e["detail"][:70]
+                            ), unsafe_allow_html=True)
                             if e.get("result_preview"):
                                 with st.expander("👁️ Preview", expanded=False):
                                     st.caption(e["result_preview"][:300])
                         if not events:
-                            st.markdown("""
-                            <div style="display:inline-flex; align-items:center; gap:6px;
-                                        background:#5E17EB15; border:1px solid #5E17EB30;
-                                        border-radius:20px; padding:4px 12px; margin:3px 0; font-size:12px;">
-                                ⚡ <strong style="color:#5E17EB;">Direct</strong>
-                                <span style="color:#666;">— no tools needed</span>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(_tao_step(
+                                "🚀", "#5E17EB", "Express delivery",
+                                "no tools needed — direct from knowledge"
+                            ), unsafe_allow_html=True)
                         final_result = updates
 
-            tao_status.update(label="✅ Response ready", state="complete", expanded=False)
+            tao_status.update(label="✅ Delivered", state="complete", expanded=False)
 
         reply = final_result.get("reply", "")
         tool_events = final_result.get("tool_events", [])

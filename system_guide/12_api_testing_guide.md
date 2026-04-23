@@ -32,6 +32,27 @@ Expected:
 
 ---
 
+## 1b. List input files
+
+```bash
+curl -s http://localhost:8502/files | python -m json.tool
+```
+
+Expected:
+```json
+{
+    "files": ["tech", "finance", "sales", "design", "employees", "product_context", "customer_support"],
+    "indexed": true,
+    "chunks": 152
+}
+```
+
+Useful to confirm which documents are loaded before indexing or chatting.
+
+`chunks_indexed: 0` means documents are not indexed yet — run step 2.
+
+---
+
 ## 2. Index documents
 
 ```bash
@@ -231,10 +252,14 @@ Expected: `tool_events` contains `"type": "inbox"` and the reply lists recent me
 ## 9. Generate artefacts
 
 ```bash
+# Generate only (no email)
 curl -s -X POST http://localhost:8502/generate-artifacts | python -m json.tool
+
+# Generate and email in one call
+curl -s -X POST "http://localhost:8502/generate-artifacts?notify=true" | python -m json.tool
 ```
 
-Takes 15–20 seconds. Expected response includes previews of all six artefacts (first 300 chars each) and an `email_status` field:
+Takes 15–20 seconds. Expected response includes previews of all seven artefacts (first 300 chars each) and an `email_status` field (`"skipped"` by default, `"sent"` if `notify=true`):
 ```json
 {
     "artifacts": {
@@ -243,13 +268,26 @@ Takes 15–20 seconds. Expected response includes previews of all six artefacts 
         "requirements": "## Requirements\n...",
         "success_metrics": "| Initiative | Pre-launch...",
         "impact_quadrant": "--QUICK_WINS--\n...",
-        "rice_score": "| Initiative | Reach | Impact..."
+        "rice_score": "| Initiative | Reach | Impact...",
+        "roadmap_timeline": "| Initiative | Start | End | Phase |..."
     },
-    "email_status": "sent"
+    "email_status": "skipped"
 }
 ```
 
 Returns `400` if documents are not indexed — call `/index` first.
+
+---
+
+## 9b. Notify team separately
+
+Sends the artifact email without regenerating. Use after reviewing the generated artefacts.
+
+```bash
+curl -s -X POST http://localhost:8502/notify-team | python -m json.tool
+```
+
+Returns `400` if no saved artefacts exist — generate them first.
 
 ---
 
@@ -259,7 +297,52 @@ Returns `400` if documents are not indexed — call `/index` first.
 curl -s http://localhost:8502/artifacts | python -m json.tool
 ```
 
-Returns the full content of all six artefact files from `outputs/`. Empty `{}` if artefacts have never been generated.
+Returns the full content of all artefact files from `outputs/`. Empty `{}` if artefacts have never been generated.
+
+---
+
+## 11. Streaming chat (SSE)
+
+`POST /chat/stream` returns a [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) stream — one JSON event per graph node as it completes. This is the endpoint a custom frontend (React/Vite) should use to show the live thinking display.
+
+```bash
+curl -s -N -X POST http://localhost:8502/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What are the sprint constraints?", "role": "Tech/Engineering"}'
+```
+
+Each line looks like:
+```
+data: {"node": "classify_intent", "updates": {"intent": "search_query"}, "thread_id": "abc-123"}
+data: {"node": "retrieve_context", "updates": {"retrieved_context": [...]}, "thread_id": "abc-123"}
+data: {"node": "generate_response", "updates": {"reply": "...", "tool_events": [...]}, "thread_id": "abc-123"}
+data: {"node": "__done__", "thread_id": "abc-123"}
+```
+
+The `thread_id` is auto-generated if not supplied. Pass it back in subsequent requests to continue the conversation.
+
+**JavaScript fetch example:**
+```js
+const res = await fetch("http://localhost:8502/chat/stream", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ message, role, thread_id }),
+});
+const reader = res.body.getReader();
+const decoder = new TextDecoder();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  const lines = decoder.decode(value).split("\n");
+  for (const line of lines) {
+    if (line.startsWith("data: ")) {
+      const event = JSON.parse(line.slice(6));
+      if (event.node === "__done__") break;
+      // handle event.node + event.updates
+    }
+  }
+}
+```
 
 ---
 

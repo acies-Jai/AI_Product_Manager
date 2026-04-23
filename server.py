@@ -3,10 +3,15 @@ FastAPI server wrapping the PM Assistant graph.
 Run:  uvicorn server:app --reload --port 8502
 Test: curl http://localhost:8502/health
 """
+import asyncio
+import json
 import uuid
 from contextlib import asynccontextmanager
+from threading import Thread
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from langgraph.types import Command
 from pydantic import BaseModel
 
@@ -35,13 +40,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PM Assistant API", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ── Request / response models ─────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
     message: str
     role: str = "Product Manager"
-    thread_id: str = ""          # empty → auto-generate a new session
+    thread_id: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -68,11 +81,31 @@ def _config(thread_id: str) -> dict:
     return {"configurable": {"thread_id": thread_id}}
 
 
+def _sanitize(obj):
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(i) for i in obj]
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    return str(obj)
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
     return {"status": "ok", "chunks_indexed": vs.count()}
+
+
+@app.get("/files")
+def get_files():
+    docs = load_inputs()
+    return {
+        "files": list(docs.keys()),
+        "indexed": vs.count() > 0,
+        "chunks": vs.count(),
+    }
 
 
 @app.post("/index", response_model=IndexResponse)
@@ -95,7 +128,7 @@ def chat(req: ChatRequest):
     result: dict = {}
     for event in graph.stream(input_state, _config(thread_id), stream_mode="updates"):
         for node, updates in event.items():
-            if node == "generate_response" or node == "human_confirm":
+            if node in ("generate_response", "human_confirm"):
                 result = updates
     if not result:
         raise HTTPException(500, "Graph produced no output")
@@ -105,6 +138,51 @@ def chat(req: ChatRequest):
         reply=result.get("reply", ""),
         tool_events=result.get("tool_events") or [],
         pending_write=result.get("pending_write"),
+    )
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    thread_id = req.thread_id or str(uuid.uuid4())
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def run_graph():
+        input_state = {
+            "user_message": f"[{req.role}]: {req.message}",
+            "role": req.role,
+            "history": [],
+            "tool_events": [],
+            "pending_write": None,
+        }
+        try:
+            for event in graph.stream(input_state, _config(thread_id), stream_mode="updates"):
+                for node, updates in event.items():
+                    if node == "__start__":
+                        continue
+                    payload = {
+                        "node": node,
+                        "updates": _sanitize(updates),
+                        "thread_id": thread_id,
+                    }
+                    asyncio.run_coroutine_threadsafe(queue.put(payload), loop)
+        finally:
+            asyncio.run_coroutine_threadsafe(queue.put(None), loop)
+
+    Thread(target=run_graph, daemon=True).start()
+
+    async def event_stream():
+        while True:
+            item = await queue.get()
+            if item is None:
+                yield f"data: {json.dumps({'node': '__done__', 'thread_id': thread_id})}\n\n"
+                break
+            yield f"data: {json.dumps(item)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
