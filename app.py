@@ -450,16 +450,17 @@ with st.sidebar:
             with st.spinner("Retrieving context and generating artefacts…"):
                 st.session_state.artifacts = generate_artifacts(vs)
                 save_artifacts(st.session_state.artifacts)
-            email_status = notify_artifacts_generated(st.session_state.artifacts)
             st.success("Done — saved to outputs/")
-            st.caption(f"Email: {email_status}")
             st.rerun()
 
     if st.session_state.artifacts:
         st.markdown(
-            '<div style="color:#A78BCA; font-size:11px; margin-top:8px;">Outputs saved to outputs/</div>',
+            '<div style="color:#A78BCA; font-size:11px; margin-top:4px; margin-bottom:8px;">Outputs saved to outputs/</div>',
             unsafe_allow_html=True,
         )
+        if st.button("📧  Notify Team", use_container_width=True):
+            email_status = notify_artifacts_generated(st.session_state.artifacts)
+            st.success(f"Email: {email_status}")
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────

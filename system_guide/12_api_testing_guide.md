@@ -284,11 +284,17 @@ curl -s -X POST http://localhost:8502/chat \
   -d '{"message":"What is the H1 FY26 budget allocation?","role":"Design"}' \
   | python -m json.tool
 
-# 5. Generate artefacts
+# 5. Generate artefacts (no email)
 curl -s -X POST http://localhost:8502/generate-artifacts | python -m json.tool
+
+# 5b. Generate artefacts AND notify team in one call
+curl -s -X POST "http://localhost:8502/generate-artifacts?notify=true" | python -m json.tool
 
 # 6. Fetch saved artefacts
 curl -s http://localhost:8502/artifacts | python -m json.tool
+
+# 7. Notify team separately (uses already-saved artefacts)
+curl -s -X POST http://localhost:8502/notify-team | python -m json.tool
 ```
 
 All six commands should complete without errors and produce non-empty JSON.

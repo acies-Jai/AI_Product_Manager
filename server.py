@@ -115,16 +115,26 @@ def confirm(req: ConfirmRequest):
 
 
 @app.post("/generate-artifacts")
-def gen_artifacts():
+def gen_artifacts(notify: bool = False):
     if vs.count() == 0:
         raise HTTPException(400, "Index documents first — call POST /index")
     artifacts = generate_artifacts(vs)
     save_artifacts(artifacts)
-    email_status = notify_artifacts_generated(artifacts)
+    email_status = notify_artifacts_generated(artifacts) if notify else "skipped"
     return {
         "artifacts": {k: v[:300] + "…" for k, v in artifacts.items()},
         "email_status": email_status,
     }
+
+
+@app.post("/notify-team")
+def notify_team():
+    from core.artifacts import load_saved_artifacts
+    artifacts = load_saved_artifacts()
+    if not artifacts:
+        raise HTTPException(400, "No artifacts found — generate them first")
+    email_status = notify_artifacts_generated(artifacts)
+    return {"email_status": email_status}
 
 
 @app.get("/artifacts")
