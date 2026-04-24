@@ -85,25 +85,57 @@ _KNOWN_TOOLS = "search_context|read_file|read_inbox|send_email|propose_update_se
 def _parse_text_tool_call(content: str) -> tuple[str, dict] | None:
     """
     Detect tool calls written as plain text instead of structured API calls.
-    Handles two formats:
-      1. JSON format:  <function/tool_name{"arg": "value", ...}>
-      2. Simple format: [-=]?tool_name: value
+    Handles three formats:
+      1. Slash JSON:  <function/tool_name{"arg": "value", ...}>
+      2. Paren JSON:  <function(tool_name)": {"arg": "value", ...}>
+      3. Simple:      [-=]?tool_name: value
     """
     import json as _json
 
-    # Format 1 — LLaMA JSON fallback: <function/send_email{"to": [...], ...}>
-    json_m = re.search(
-        rf'<function/({_KNOWN_TOOLS})\s*(\{{.*?\}})\s*>',
-        content,
-        re.DOTALL,
-    )
-    if json_m:
-        name = json_m.group(1).strip()
-        try:
-            args = _json.loads(json_m.group(2))
-        except _json.JSONDecodeError:
-            args = {}
-        return name, args
+    def _extract_json_at(text: str, start: int) -> dict | None:
+        """Brace-match from position start and parse the JSON object found there."""
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(start, len(text)):
+            c = text[i]
+            if esc:
+                esc = False
+                continue
+            if c == '\\' and in_str:
+                esc = True
+                continue
+            if c == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return _json.loads(text[start:i + 1])
+                    except _json.JSONDecodeError:
+                        return None
+        return None
+
+    # Format 1 — <function/send_email{"to": [...], ...}>
+    m1 = re.search(rf'<function/({_KNOWN_TOOLS})\s*(\{{)', content, re.DOTALL)
+    if m1:
+        name = m1.group(1).strip()
+        args = _extract_json_at(content, m1.start(2))
+        if args is not None:
+            return name, args
+
+    # Format 2 — <function(propose_update_section)": {"filename": ..., ...}>
+    m2 = re.search(rf'<function\(({_KNOWN_TOOLS})\)["\s]*:\s*(\{{)', content, re.DOTALL)
+    if m2:
+        name = m2.group(1).strip()
+        args = _extract_json_at(content, m2.start(2))
+        if args is not None:
+            return name, args
 
     # Format 2 — simple colon format: -search_context: "query"
     m = re.search(
@@ -251,6 +283,11 @@ def build_graph(vector_store: VectorStore):
                     "read_inbox", "using read_inbox", "let me read", "i'll read",
                     "checking inbox", "reading inbox", "fetching email", "check the inbox",
                     "checking the inbox", "reading the inbox",
+                    # file write narration patterns
+                    "propose_update_section", "propose_create_file", "propose_delete_file",
+                    "i'll update", "let me update", "i will update", "updating the",
+                    "i'll create", "let me create", "i will create",
+                    "read_file", "let me read the file", "i'll read the file",
                 )
                 if (
                     not tool_events  # no real tool calls yet this turn
