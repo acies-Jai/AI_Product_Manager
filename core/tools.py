@@ -176,6 +176,10 @@ def run_tool(
             query=args.get("query", "ALL"),
             max_results=args.get("max_results", 5),
         )
+        if not results:
+            return "No emails found matching the query. The inbox may be empty for this filter."
+        if isinstance(results, list) and results and "error" in results[0]:
+            return f"Inbox unavailable: {results[0]['error']}"
         return json.dumps(results, ensure_ascii=False)
 
     if name == "send_email":

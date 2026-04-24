@@ -74,43 +74,48 @@ def read_inbox(query: str = "ALL", max_results: int = 5) -> list[dict]:
     if not (sender and password):
         return [{"error": "GMAIL_SENDER / GMAIL_APP_PASSWORD not set — inbox reading unavailable"}]
 
-    with imaplib.IMAP4_SSL("imap.gmail.com") as mail:
-        mail.login(sender, password)
-        mail.select("inbox")
-        _, uids = mail.search(None, query)
-        uid_list = uids[0].split()
-        if not uid_list:
-            return []
-        uid_list = uid_list[-max_results:]
+    try:
+        with imaplib.IMAP4_SSL("imap.gmail.com") as mail:
+            mail.login(sender, password)
+            mail.select("INBOX")
+            _, uids = mail.search(None, query)
+            uid_list = uids[0].split()
+            if not uid_list:
+                return []
+            uid_list = uid_list[-max_results:]
 
-        results = []
-        for uid in reversed(uid_list):
-            _, data = mail.fetch(uid, "(RFC822)")
-            msg = message_from_bytes(data[0][1])
-            raw_subject, enc = decode_header(msg["Subject"] or "")[0]
-            if isinstance(raw_subject, bytes):
-                subject = raw_subject.decode(enc or "utf-8", errors="replace")
-            else:
-                subject = raw_subject or ""
-            body = ""
-            if msg.is_multipart():
-                for part in msg.walk():
-                    ct = part.get_content_type()
-                    if ct == "text/plain":
-                        body = part.get_payload(decode=True).decode(errors="replace")
-                        break
-                    if ct == "text/html" and not body:
-                        body = _strip_html(part.get_payload(decode=True).decode(errors="replace"))
-            else:
-                raw = msg.get_payload(decode=True).decode(errors="replace")
-                body = _strip_html(raw) if msg.get_content_type() == "text/html" else raw
-            results.append({
-                "sender": msg.get("From", ""),
-                "subject": subject,
-                "date": msg.get("Date", ""),
-                "body_snippet": body[:500].strip(),
-            })
-    return results
+            results = []
+            for uid in reversed(uid_list):
+                _, data = mail.fetch(uid, "(RFC822)")
+                msg = message_from_bytes(data[0][1])
+                raw_subject, enc = decode_header(msg["Subject"] or "")[0]
+                if isinstance(raw_subject, bytes):
+                    subject = raw_subject.decode(enc or "utf-8", errors="replace")
+                else:
+                    subject = raw_subject or ""
+                body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        ct = part.get_content_type()
+                        if ct == "text/plain":
+                            body = part.get_payload(decode=True).decode(errors="replace")
+                            break
+                        if ct == "text/html" and not body:
+                            body = _strip_html(part.get_payload(decode=True).decode(errors="replace"))
+                else:
+                    raw = msg.get_payload(decode=True).decode(errors="replace")
+                    body = _strip_html(raw) if msg.get_content_type() == "text/html" else raw
+                results.append({
+                    "sender": msg.get("From", ""),
+                    "subject": subject,
+                    "date": msg.get("Date", ""),
+                    "body_snippet": body[:500].strip(),
+                })
+        return results
+    except imaplib.IMAP4.error as e:
+        return [{"error": f"IMAP authentication or connection failed: {e}"}]
+    except Exception as e:
+        return [{"error": f"Failed to read inbox: {e}"}]
 
 
 # ── HTML rendering helpers ────────────────────────────────────────────────────

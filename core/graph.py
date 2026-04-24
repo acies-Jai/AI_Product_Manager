@@ -242,11 +242,15 @@ def build_graph(vector_store: VectorStore):
                     reply = final.choices[0].message.content
                     return _make_return(state, reply, tool_events, pending_writes)
 
-                # Detect hallucinated search narration: model describes a search but never calls the tool.
-                # Force it to actually search before answering.
+                # Detect narration: model describes a tool call in text without actually invoking it.
+                # Force it to call the tool instead.
                 _narration_patterns = (
                     "searching for", "let me search", "i'll search", "i will search",
                     "search_context", "looking up", "retrieving", "let me look",
+                    # inbox / email narration patterns
+                    "read_inbox", "using read_inbox", "let me read", "i'll read",
+                    "checking inbox", "reading inbox", "fetching email", "check the inbox",
+                    "checking the inbox", "reading the inbox",
                 )
                 if (
                     not tool_events  # no real tool calls yet this turn
@@ -260,8 +264,9 @@ def build_graph(vector_store: VectorStore):
                     messages.append({
                         "role": "user",
                         "content": (
-                            "You described a search but did not call the search_context tool. "
-                            "Do NOT narrate — call search_context now with the relevant query."
+                            "You described a tool call but did not actually invoke the tool. "
+                            "Do NOT write narration — call the appropriate tool now "
+                            "(read_inbox, search_context, send_email, etc.) with the correct arguments."
                         ),
                     })
                     continue  # retry the loop so the model actually calls the tool
