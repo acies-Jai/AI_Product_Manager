@@ -1,7 +1,8 @@
 | Initiative | Pre-launch Metric | Post-launch Metric | Owner |
 | --- | --- | --- | --- |
-| 1-click reorder | Install-to-first-order conversion: 31% | Install-to-first-order conversion: 35% | Growth Head |
-| Proactive ETA alerts | Late delivery tickets: 24% of total | Late delivery tickets: 18% of total | Customer Support |
-| Fix search 0-result rate | Search 0-result rate: 21% | Search 0-result rate: 12% | Search Pod Lead |
-| Checkout flow redesign | Checkout drop-off rate: 18% | Checkout drop-off rate: 12% | Checkout Pod Lead |
-| Automated refunds for small orders | Refund processing time: 48 hours | Refund processing time: 6 hours | Finance Team |
+| Checkout flow redesign | 18% drop-off rate at payment page | < 10% drop-off rate at payment page | Product Manager |
+| Search function improvement | 21% search abandonment rate | < 15% search abandonment rate | Product Manager |
+| Automated refunds | 48h refund resolution time | < 6h refund resolution time | Product Manager |
+| Real-time packing status | N/A | 90% user satisfaction with packing status | Product Manager |
+| 1-click reorder | N/A | 20% increase in reorder rate | Product Manager |
+| Proactive ETA alerts | N/A | 90% user satisfaction with ETA alerts | Product Manager |

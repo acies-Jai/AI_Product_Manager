@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
 import ArtifactPanel from './components/ArtifactPanel'
 import ChatPanel from './components/ChatPanel'
+import NotificationToast from './components/NotificationToast'
 
 export default function App() {
   const loadInitial = useStore(s => s.loadInitial)
@@ -12,6 +13,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-zepto-bg">
+      <NotificationToast />
       {/* Left sidebar */}
       <Sidebar />
 

@@ -205,13 +205,49 @@ def gen_artifacts(notify: bool = False):
     }
 
 
+@app.get("/team")
+def get_team():
+    """Return department → email mapping for the notify panel."""
+    from core.email_service import _load_config
+    config = _load_config()
+    leads: dict = config.get("triggers", {}).get("action_item_leads", {})
+    all_recipients: list = (
+        config.get("triggers", {}).get("artifacts_generated", {}).get("recipients", [])
+    )
+    dept_labels = {
+        "product": "Product",
+        "tech": "Tech / Engineering",
+        "cs": "Customer Support",
+        "design": "Design",
+        "finance": "Finance",
+        "growth": "Growth & Marketing",
+        "data": "Data Science",
+        "operations": "Operations",
+        "leadership": "Leadership",
+    }
+    departments = [
+        {"key": dept, "label": dept_labels.get(dept, dept.title()), "emails": emails}
+        for dept, emails in leads.items()
+    ]
+    return {"departments": departments, "all_recipients": all_recipients}
+
+
+class NotifyRequest(BaseModel):
+    recipients: list[str] = []  # empty = send to all configured recipients
+
+
 @app.post("/notify-team")
-def notify_team():
+def notify_team(req: NotifyRequest | None = None):
     from core.artifacts import load_saved_artifacts
+    from core.email_service import notify_artifacts_generated, notify_with_recipients
     artifacts = load_saved_artifacts()
     if not artifacts:
         raise HTTPException(400, "No artifacts found — generate them first")
-    email_status = notify_artifacts_generated(artifacts)
+    recipients = (req.recipients if req else []) or []
+    if recipients:
+        email_status = notify_with_recipients(artifacts, recipients)
+    else:
+        email_status = notify_artifacts_generated(artifacts)
     return {"email_status": email_status}
 
 

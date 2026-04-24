@@ -1,16 +1,20 @@
 --QUICK_WINS--
-* Implementing proactive ETA alerts to reduce late delivery tickets
-* Enhancing search relevance to reduce 0-result rate
-* Automating refund processing for small orders to reduce refund resolution time
+* Implement 1-click reorder to reduce friction and increase reorder rate
+* Fix search 0-result rate via transliteration and regional synonyms to reduce search abandonment
+* Provide proactive ETA alerts to improve user experience and reduce support tickets
+
 --MAJOR_BETS--
-* Redesigning the checkout flow to reduce drop-offs and improve OCR
-* Implementing real-time packing status to enhance customer experience
-* Developing a personalised home screen to increase order rate
+* Redesign the checkout flow to reduce drop-off rates and improve user experience
+* Automate the refund process for small orders to reduce refund resolution time and improve customer satisfaction
+* Implement real-time packing status to improve user experience and reduce support tickets
+
 --LOW_HANGING--
-* Fixing app crashes and bugs to improve customer satisfaction
-* Enhancing push notification copy to improve customer engagement
-* Streamlining the first-order flow to reduce drop-offs
+* Improve push notification copy to increase user engagement
+* Implement bulk action tools for handling surge periods to reduce support tickets
+
 --DEPRIORITISE--
-* Developing a new feature for win-back flow, given the current focus on core conversion improvements
-* Implementing a new referral program, given the current focus on reducing subsidy burn
+* Implement personalized home screens, as it is a low-priority feature
+* Implement real-time inventory display, as it is a low-priority feature
+* Streamline the first-order flow, as it is a low-priority feature
+
 --END_QUADRANT--

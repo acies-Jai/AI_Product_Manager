@@ -27,8 +27,20 @@ export async function generateArtifacts() {
   return res.json()
 }
 
-export async function notifyTeam() {
-  const res = await fetch(`${BASE}/notify-team`, { method: 'POST' })
+export interface Department { key: string; label: string; emails: string[] }
+
+export async function fetchTeam(): Promise<{ departments: Department[]; all_recipients: string[] }> {
+  const res = await fetch(`${BASE}/team`)
+  if (!res.ok) throw new Error('Failed to fetch team')
+  return res.json()
+}
+
+export async function notifyTeam(recipients: string[] = []) {
+  const res = await fetch(`${BASE}/notify-team`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipients }),
+  })
   if (!res.ok) throw new Error('Failed to notify team')
   return res.json() as Promise<{ email_status: string }>
 }

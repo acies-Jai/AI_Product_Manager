@@ -14,11 +14,10 @@ function parseRice(content: string): RiceRow[] {
   const rows: RiceRow[] = []
   const lines = content.split('\n').filter(l => l.trim().startsWith('|'))
   let headers: string[] = []
-  lines.forEach((line, i) => {
+  lines.forEach((line) => {
     if (line.replace(/\|/g, '').trim().match(/^[-: ]+$/)) return
     const cells = line.split('|').map(c => c.trim()).filter(Boolean)
-    if (!headers.length || i === 0) { headers = cells.map(h => h.toLowerCase()); return }
-
+    if (!headers.length) { headers = cells.map(h => h.toLowerCase()); return }
     const get = (keys: string[]) => {
       for (const k of keys) {
         const idx = headers.findIndex(h => h.includes(k))
@@ -27,7 +26,7 @@ function parseRice(content: string): RiceRow[] {
       return ''
     }
     const scoreRaw = get(['score', 'rice', 'total', 'final'])
-    const score = parseFloat(scoreRaw.replace(',', '')) || 0
+    const score = parseFloat(scoreRaw.replace(/,/g, '')) || 0
     rows.push({
       initiative: get(['initiative', 'feature', 'name', 'item', 'title']),
       reach:      get(['reach']),
@@ -40,83 +39,89 @@ function parseRice(content: string): RiceRow[] {
   return rows.filter(r => r.initiative && r.score > 0).sort((a, b) => b.score - a.score)
 }
 
-function barColor(score: number) {
-  if (score >= 200) return '#10B981'
-  if (score >= 80)  return '#F59E0B'
-  return '#EF4444'
+// Relative thresholds — top 40% green, next 30% amber, rest red
+function makeColorFn(rows: RiceRow[]) {
+  const max = Math.max(...rows.map(r => r.score), 1)
+  return (score: number) => {
+    const r = score / max
+    if (r >= 0.6) return '#10B981'
+    if (r >= 0.3) return '#F59E0B'
+    return '#EF4444'
+  }
 }
 
-const scoreLabel = (score: number) => score >= 200 ? 'High' : score >= 80 ? 'Med' : 'Low'
-
-const CustomTooltip = ({ active, payload }: any) => {
-  if (!active || !payload?.length) return null
-  const r = payload[0].payload as RiceRow
-  const c = barColor(r.score)
-  return (
-    <div className="bg-white border border-zepto-muted rounded-xl p-3 shadow-lg text-xs space-y-1.5 min-w-[180px]">
-      <p className="font-bold text-zepto-dark leading-snug">{r.initiative}</p>
-      <div className="flex items-center gap-2">
-        <span
-          className="text-[10px] font-bold rounded-full px-2 py-0.5 border"
-          style={{ background: `${c}15`, color: c, borderColor: `${c}40` }}
-        >
-          {scoreLabel(r.score)} · {r.score.toFixed(1)}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-gray-500">
-        <span>Reach <strong className="text-zepto-dark">{r.reach}</strong></span>
-        <span>Impact <strong className="text-zepto-dark">{r.impact}</strong></span>
-        <span>Conf. <strong className="text-zepto-dark">{r.confidence}</strong></span>
-        <span>Effort <strong className="text-zepto-dark">{r.effort}</strong></span>
-      </div>
-    </div>
-  )
+function scoreTier(score: number, max: number) {
+  const r = score / Math.max(max, 1)
+  if (r >= 0.6) return 'High'
+  if (r >= 0.3) return 'Med'
+  return 'Low'
 }
 
 const LEGEND: [string, string][] = [
-  ['#10B981', 'High (≥200)'],
-  ['#F59E0B', 'Medium (≥80)'],
-  ['#EF4444', 'Low (<80)'],
+  ['#10B981', 'High priority'],
+  ['#F59E0B', 'Medium priority'],
+  ['#EF4444', 'Lower priority'],
 ]
-
-function ScoreLegend() {
-  return (
-    <div className="flex items-center gap-3 mb-4">
-      {LEGEND.map(([color, label]) => (
-        <div key={label} className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-          <span className="text-[11px] text-gray-500">{label}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 export default function RiceTab({ content }: { content: string }) {
   const rows = parseRice(content)
 
   if (rows.length) {
+    const barColor = makeColorFn(rows)
+    const max = Math.max(...rows.map(r => r.score), 1)
+
     return (
-      <div className="space-y-6">
-        <ScoreLegend />
+      <div className="space-y-5">
+        {/* Legend */}
+        <div className="flex items-center gap-4 flex-wrap">
+          {LEGEND.map(([color, label]) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+              <span className="text-[11px] text-gray-500">{label}</span>
+            </div>
+          ))}
+          <span className="ml-auto text-[11px] text-gray-400">Score = (Reach × Impact × Confidence%) ÷ Effort</span>
+        </div>
 
         {/* Bar chart */}
-        <ResponsiveContainer width="100%" height={Math.max(200, rows.length * 44)}>
-          <BarChart data={rows} layout="vertical" margin={{ top: 2, right: 56, left: 0, bottom: 2 }}>
+        <ResponsiveContainer width="100%" height={Math.max(180, rows.length * 46)}>
+          <BarChart data={rows} layout="vertical" margin={{ top: 2, right: 64, left: 0, bottom: 2 }}>
             <CartesianGrid horizontal={false} stroke="#F0EAFF" />
             <XAxis type="number" tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
             <YAxis
               type="category"
               dataKey="initiative"
-              width={180}
+              width={190}
               tick={{ fontSize: 11, fill: '#374151' }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v: string) => v.length > 26 ? v.slice(0, 24) + '…' : v}
+              tickFormatter={(v: string) => v.length > 28 ? v.slice(0, 26) + '…' : v}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#F0EAFF' }} />
+            <Tooltip
+              cursor={{ fill: '#F0EAFF' }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null
+                const r = payload[0].payload as RiceRow
+                const c = barColor(r.score)
+                return (
+                  <div className="bg-white border border-zepto-muted rounded-xl p-3 shadow-lg text-xs space-y-1.5 min-w-[190px]">
+                    <p className="font-bold text-zepto-dark leading-snug">{r.initiative}</p>
+                    <span className="text-[10px] font-bold rounded-full px-2 py-0.5 border inline-block"
+                      style={{ background: `${c}15`, color: c, borderColor: `${c}40` }}>
+                      {scoreTier(r.score, max)} · {r.score.toFixed(1)}
+                    </span>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-gray-500 pt-1">
+                      <span>Reach <strong className="text-zepto-dark">{r.reach}</strong></span>
+                      <span>Impact <strong className="text-zepto-dark">{r.impact}</strong></span>
+                      <span>Conf. <strong className="text-zepto-dark">{r.confidence}</strong></span>
+                      <span>Effort <strong className="text-zepto-dark">{r.effort}</strong></span>
+                    </div>
+                  </div>
+                )
+              }}
+            />
             <Bar dataKey="score" radius={[0, 6, 6, 0]}
-              label={{ position: 'right', fontSize: 11, fill: '#6B7280', formatter: (v: number) => v.toFixed(0) }}
+              label={{ position: 'right', fontSize: 11, fill: '#6B7280', formatter: (v: number) => v.toFixed(1) }}
             >
               {rows.map((r, i) => <Cell key={i} fill={barColor(r.score)} />)}
             </Bar>
@@ -139,10 +144,8 @@ export default function RiceTab({ content }: { content: string }) {
                 const score = parseFloat(value)
                 const c = barColor(score)
                 return (
-                  <span
-                    className="text-[11px] font-bold rounded-full px-2 py-0.5 border"
-                    style={{ background: `${c}15`, color: c, borderColor: `${c}40` }}
-                  >
+                  <span className="text-[11px] font-bold rounded-full px-2 py-0.5 border inline-block"
+                    style={{ background: `${c}15`, color: c, borderColor: `${c}40` }}>
                     {value}
                   </span>
                 )
@@ -155,9 +158,7 @@ export default function RiceTab({ content }: { content: string }) {
     )
   }
 
-  // generic table fallback
   const fallback = parseMarkdownTable(content)
   if (fallback) return <StyledTable headers={fallback.headers} rows={fallback.rows} />
-
   return <pre className="text-xs text-gray-400 bg-zepto-bg rounded-xl p-4 whitespace-pre-wrap">{content}</pre>
 }

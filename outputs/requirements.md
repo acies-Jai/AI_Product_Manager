@@ -1,15 +1,18 @@
-### Requirements
-* Automate refund processing for orders < ₹500
-* Implement proactive ETA alerts for customers
-* Enhance search relevance for regional language queries
-* Redesign checkout flow to reduce drop-offs
-* Implement real-time packing status for customers
-### Scope
-In: Checkout flow redesign, automated refunds, search relevance enhancements, proactive ETA alerts, real-time packing status
-Out: New features that require significant engineering effort or resources
-### Final Specification
-* Automated refund processing: Refunds for orders < ₹500 are processed automatically, with customers receiving updates via SMS/WhatsApp
-* Proactive ETA alerts: Customers receive proactive alerts when their ETA changes by > 5 minutes
-* Search relevance enhancements: Search results for regional language queries return relevant results, with a 0-result rate below 12%
-* Checkout flow redesign: The checkout flow is redesigned to reduce drop-offs, with a minimum of 3 unnecessary steps removed
-* Real-time packing status: Customers can view real-time packing status for their orders
+## Requirements
+* Simplify the checkout flow to reduce drop-off rates
+* Improve search relevance for regional language queries
+* Automate the refund process for small orders
+* Provide real-time packing status to improve user experience
+* Implement 1-click reorder and proactive ETA alerts
+
+## Scope
+* In scope: Checkout flow redesign, search function improvement, automated refunds, real-time packing status, 1-click reorder, proactive ETA alerts
+* Out of scope: Personalized home screens, real-time inventory display, streamlined first-order flow
+
+## Final Specification
+* Checkout flow redesign: Reduce the number of steps in the checkout flow to 2, and ensure that the flow is intuitive and seamless
+* Search function improvement: Fix the search 0-result rate via transliteration and regional synonyms, and ensure that search results are relevant and accurate
+* Automated refunds: Automate the refund process for small orders, and ensure that refunds are processed quickly and efficiently
+* Real-time packing status: Provide real-time packing status to users, and ensure that the status is updated in real-time
+* 1-click reorder: Implement 1-click reorder, and ensure that the feature is intuitive and easy to use
+* Proactive ETA alerts: Implement proactive ETA alerts, and ensure that the alerts are timely and accurate
