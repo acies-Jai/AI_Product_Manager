@@ -79,11 +79,27 @@ _KNOWN_TOOLS = "search_context|read_file|read_inbox|send_email|propose_update_se
 def _parse_text_tool_call(content: str) -> tuple[str, dict] | None:
     """
     Detect tool calls written as plain text instead of structured API calls.
-    Handles all of:
-      -search_context: "query"        (dash prefix)
-      =search_context: query          (equals prefix)
-      search_context: query           (bare, start of line)
+    Handles two formats:
+      1. JSON format:  <function/tool_name{"arg": "value", ...}>
+      2. Simple format: [-=]?tool_name: value
     """
+    import json as _json
+
+    # Format 1 — LLaMA JSON fallback: <function/send_email{"to": [...], ...}>
+    json_m = re.search(
+        rf'<function/({_KNOWN_TOOLS})\s*(\{{.*?\}})\s*>',
+        content,
+        re.DOTALL,
+    )
+    if json_m:
+        name = json_m.group(1).strip()
+        try:
+            args = _json.loads(json_m.group(2))
+        except _json.JSONDecodeError:
+            args = {}
+        return name, args
+
+    # Format 2 — simple colon format: -search_context: "query"
     m = re.search(
         rf'(?:[-=])?({_KNOWN_TOOLS}):\s*["\']?(.+?)["\']?\s*$',
         content,
@@ -99,6 +115,8 @@ def _parse_text_tool_call(content: str) -> tuple[str, dict] | None:
         return name, {"filename": arg}
     if name == "read_inbox":
         return name, {"query": arg}
+    if name == "send_email":
+        return name, {"to": [arg], "subject": "", "body": ""}
     return None
 
 
@@ -192,11 +210,20 @@ def build_graph(vector_store: VectorStore):
             if not msg.tool_calls:
                 content = msg.content or ""
 
-                # Detect text-encoded tool calls (e.g. -search_context: "query")
+                # Detect text-encoded tool calls (e.g. <function/send_email{...}> or -search_context: "query")
                 text_call = _parse_text_tool_call(content)
                 if text_call:
                     name, args = text_call
-                    tool_events.append({"type": "search", "detail": args.get("query", ""), "result_preview": ""})
+                    _event_type = (
+                        "email" if name == "send_email" else
+                        "inbox" if name == "read_inbox" else
+                        "search"
+                    )
+                    _event_detail = (
+                        ", ".join(args.get("to", [])) if name == "send_email" else
+                        args.get("query", args.get("filename", ""))
+                    )
+                    tool_events.append({"type": _event_type, "detail": _event_detail, "result_preview": ""})
                     result = run_tool(name, args, vector_store, role, pending_writes)
                     tool_events[-1]["result_preview"] = result[:300].strip()
                     followup = messages + [
