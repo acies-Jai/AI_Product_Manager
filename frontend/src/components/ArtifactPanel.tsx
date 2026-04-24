@@ -6,15 +6,22 @@ import MetricsTab from './artifacts/MetricsTab'
 import QuadrantTab from './artifacts/QuadrantTab'
 import KeyFocusTab from './artifacts/KeyFocusTab'
 import RequirementsTab from './artifacts/RequirementsTab'
-import { Loader2, Zap } from 'lucide-react'
+import {
+  Loader2, Zap, Map, Target, FileText, BarChart2, LayoutGrid, Scale,
+  Search, MessageSquare, CheckCircle,
+} from 'lucide-react'
 
-const TAB_ICONS: Record<string, string> = {
-  roadmap:         '🗺',
-  key_focus_areas: '🎯',
-  requirements:    '📋',
-  success_metrics: '📊',
-  impact_quadrant: '⚡',
-  rice_score:      '🔢',
+function TabIcon({ tabKey, size = 12 }: { tabKey: string; size?: number }) {
+  const props = { size }
+  switch (tabKey) {
+    case 'roadmap':         return <Map {...props} />
+    case 'key_focus_areas': return <Target {...props} />
+    case 'requirements':    return <FileText {...props} />
+    case 'success_metrics': return <BarChart2 {...props} />
+    case 'impact_quadrant': return <LayoutGrid {...props} />
+    case 'rice_score':      return <Scale {...props} />
+    default:                return null
+  }
 }
 
 function renderTab(key: ArtifactKey, content: string, artifacts: Record<string, string>) {
@@ -26,6 +33,12 @@ function renderTab(key: ArtifactKey, content: string, artifacts: Record<string, 
   if (key === 'requirements')     return <RequirementsTab content={content} />
   return <pre className="text-xs text-gray-500 whitespace-pre-wrap">{content}</pre>
 }
+
+const STEP_ICONS = [
+  <Search size={22} />,
+  <Zap size={22} />,
+  <MessageSquare size={22} />,
+]
 
 export default function ArtifactPanel() {
   const { artifacts, activeTab, setActiveTab, isGenerating, generateArtifacts, chunksIndexed } = useStore()
@@ -69,17 +82,19 @@ export default function ArtifactPanel() {
         </div>
         <div className="flex justify-center gap-3 flex-wrap">
           {[
-            { icon: '🔍', step: '1', label: 'Index Documents', done: chunksIndexed > 0 },
-            { icon: '⚡', step: '2', label: 'Generate Artifacts', done: false },
-            { icon: '💬', step: '3', label: 'Chat & explore', done: false },
-          ].map(({ icon, step, label, done }) => (
+            { step: '1', label: 'Index Documents', done: chunksIndexed > 0 },
+            { step: '2', label: 'Generate Artifacts', done: false },
+            { step: '3', label: 'Chat & explore', done: false },
+          ].map(({ step, label, done }, idx) => (
             <div
               key={label}
               className={`rounded-xl px-5 py-4 text-center w-36 border transition-colors ${
                 done ? 'bg-emerald-50 border-emerald-100' : 'bg-zepto-tint border-zepto-muted'
               }`}
             >
-              <div className="text-2xl">{done ? '✅' : icon}</div>
+              <div className={`flex justify-center ${done ? 'text-emerald-500' : 'text-zepto-purple'}`}>
+                {done ? <CheckCircle size={22} /> : STEP_ICONS[idx]}
+              </div>
               <p className={`text-[11px] font-semibold mt-2 ${done ? 'text-emerald-600' : 'text-zepto-dark'}`}>
                 {step}. {label}
               </p>
@@ -120,7 +135,7 @@ export default function ArtifactPanel() {
                   }
                 `}
               >
-                <span>{TAB_ICONS[key]}</span>
+                <TabIcon tabKey={key} />
                 {ARTIFACT_LABELS[key]}
                 {!hasContent && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
@@ -138,7 +153,9 @@ export default function ArtifactPanel() {
           const content = artifacts[key]
           if (!content) return (
             <div key={key} className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-              <div className="text-3xl">{TAB_ICONS[key]}</div>
+              <div className="text-zepto-purple opacity-30">
+                <TabIcon tabKey={key} size={36} />
+              </div>
               <p className="text-sm text-gray-400">No data for <strong>{ARTIFACT_LABELS[key]}</strong> yet.</p>
               <button onClick={() => generateArtifacts()} className="btn-primary text-xs flex items-center gap-1.5">
                 <Zap size={12} /> Generate

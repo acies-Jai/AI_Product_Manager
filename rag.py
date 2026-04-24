@@ -87,11 +87,7 @@ class VectorStore:
                 where=where,
             )
         except Exception:
-            # Fallback: no filter (fail-open rather than fail-silent for debugging)
-            results = self._col.query(
-                query_texts=[query],
-                n_results=min(n_results, total),
-            )
+            return []
 
         return [
             {

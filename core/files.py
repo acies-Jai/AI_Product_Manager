@@ -39,16 +39,17 @@ def preview_write(operation: dict) -> str:
     if tool == "propose_update_section":
         current = ""
         path = INPUTS_DIR / f"{args['filename']}.md"
+        clean_heading = args['heading'].lstrip("#").strip()
         if path.exists():
             match = re.search(
-                rf"## {re.escape(args['heading'])}\s*\n(.*?)(?=\n## |\Z)",
+                rf"## {re.escape(clean_heading)}\s*\n(.*?)(?=\n## |\Z)",
                 path.read_text(encoding="utf-8"),
-                re.DOTALL,
+                re.DOTALL | re.IGNORECASE,
             )
             current = match.group(1).strip() if match else "(section not found)"
         return (
             f"**File:** `inputs/{args['filename']}.md`\n"
-            f"**Section:** `## {args['heading']}`\n\n"
+            f"**Section:** `## {clean_heading}`\n\n"
             f"**Current:**\n{current}\n\n"
             f"**Proposed:**\n{args['new_content']}"
         )
@@ -62,14 +63,24 @@ def preview_write(operation: dict) -> str:
 def _exec_update_section(filename: str, heading: str, new_content: str) -> str:
     path = INPUTS_DIR / f"{filename}.md"
     if not path.exists():
-        return f"File '{filename}.md' not found."
+        # Try without .md suffix in case model included it
+        alt = INPUTS_DIR / filename
+        if alt.exists():
+            path = alt
+        else:
+            return f"File '{filename}.md' not found in inputs/."
     content = path.read_text(encoding="utf-8")
-    pattern = rf"(## {re.escape(heading)}\s*\n).*?(?=\n## |\Z)"
-    if not re.search(pattern, content, re.DOTALL):
-        return f"Section '## {heading}' not found in {filename}.md — no changes made."
-    updated = re.sub(pattern, rf"\g<1>{new_content.strip()}", content, flags=re.DOTALL)
+    # Strip any leading `#` characters and whitespace the model may have included
+    clean_heading = heading.lstrip("#").strip()
+    pattern = rf"(## {re.escape(clean_heading)}\s*\n).*?(?=\n## |\Z)"
+    if not re.search(pattern, content, re.DOTALL | re.IGNORECASE):
+        return (
+            f"Section '## {clean_heading}' not found in {filename}.md — no changes made. "
+            f"Available sections: {', '.join(re.findall(r'^## (.+)', content, re.MULTILINE))}"
+        )
+    updated = re.sub(pattern, rf"\g<1>{new_content.strip()}", content, flags=re.DOTALL | re.IGNORECASE)
     path.write_text(updated, encoding="utf-8")
-    return f"Updated '## {heading}' in {filename}.md"
+    return f"Updated '## {clean_heading}' in {filename}.md"
 
 
 def _exec_create_file(filename: str, content: str) -> str:

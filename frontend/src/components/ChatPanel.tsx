@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, KeyboardEvent } from 'react'
-import { Send, Loader2, MessageSquare } from 'lucide-react'
+import { Send, Loader2, MessageSquare, Search, Mail } from 'lucide-react'
 import { useStore } from '../store'
 import { ROLE_CONFIG } from '../types'
 import TaoStepper from './TaoStepper'
@@ -34,13 +34,13 @@ function MessageBubble({ msg }: { msg: { id: string; role: string; content: stri
         {!isUser && msg.toolEvents && msg.toolEvents.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-0.5 px-1">
             {msg.toolEvents.filter(e => e.type === 'search').length > 0 && (
-              <span className="text-[10px] bg-blue-50 text-blue-500 border border-blue-100 rounded-full px-2 py-0.5">
-                🔍 {msg.toolEvents.filter(e => e.type === 'search').length} search(es)
+              <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-500 border border-blue-100 rounded-full px-2 py-0.5">
+                <Search size={9} /> {msg.toolEvents.filter(e => e.type === 'search').length} search(es)
               </span>
             )}
             {msg.toolEvents.filter(e => e.type === 'email').map((e: any, i: number) => (
-              <span key={i} className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full px-2 py-0.5">
-                📧 Email sent
+              <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full px-2 py-0.5">
+                <Mail size={9} /> Email sent
               </span>
             ))}
           </div>
@@ -54,6 +54,12 @@ export default function ChatPanel() {
   const { messages, isThinking, taoSteps, pendingWrite, sendMessage, chunksIndexed } = useStore()
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -63,6 +69,9 @@ export default function ChatPanel() {
     const text = input.trim()
     if (!text || isThinking || chunksIndexed === 0) return
     setInput('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
     sendMessage(text)
   }
 
@@ -151,14 +160,15 @@ export default function ChatPanel() {
         <div className="flex items-end gap-2 bg-zepto-bg rounded-xl border border-zepto-muted px-3 py-2
                         focus-within:border-zepto-purple/50 focus-within:ring-2 focus-within:ring-zepto-purple/10 transition-all">
           <textarea
+            ref={textareaRef}
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={e => { setInput(e.target.value); autoResize(e.target) }}
             onKeyDown={handleKey}
-            placeholder={chunksIndexed > 0 ? 'Ask anything…' : 'Index first…'}
+            placeholder={chunksIndexed > 0 ? 'Ask anything… (Shift+Enter for newline)' : 'Index first…'}
             disabled={isThinking || chunksIndexed === 0}
             rows={1}
             className="flex-1 bg-transparent text-xs text-zepto-dark placeholder-gray-400 outline-none resize-none disabled:opacity-50 leading-relaxed"
-            style={{ maxHeight: '72px' }}
+            style={{ minHeight: '20px', maxHeight: '140px' }}
           />
           <button
             onClick={handleSend}

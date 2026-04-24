@@ -190,7 +190,15 @@ def run_tool(
                 "Use search_context to look up the correct email from employees.md first, "
                 "then retry send_email with the verified address."
             )
-        return f"Email {send_or_log(to, args.get('subject', ''), args.get('body', ''))}."
+        subject = args.get('subject', '')
+        body = args.get('body', '')
+        status = send_or_log(to, subject, body)
+        return (
+            f"Email {status}.\n\n"
+            f"To: {', '.join(to)}\n"
+            f"Subject: {subject}\n"
+            f"Body:\n{body}"
+        )
 
     if name == "read_file":
         return read_file(args["filename"])
