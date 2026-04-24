@@ -1,8 +1,6 @@
 | Initiative | Pre-launch Metric | Post-launch Metric | Owner |
 | --- | --- | --- | --- |
-| Checkout flow redesign | 18% drop-off rate at payment page | < 10% drop-off rate at payment page | Product Manager |
-| Search function improvement | 21% search abandonment rate | < 15% search abandonment rate | Product Manager |
-| Automated refunds | 48h refund resolution time | < 6h refund resolution time | Product Manager |
-| Real-time packing status | N/A | 90% user satisfaction with packing status | Product Manager |
-| 1-click reorder | N/A | 20% increase in reorder rate | Product Manager |
-| Proactive ETA alerts | N/A | 90% user satisfaction with ETA alerts | Product Manager |
+| Simplify checkout flow | 18% drop-off rate | 10% drop-off rate | Growth Team |
+| Proactive ETA alerts | 24% late delivery tickets | 15% late delivery tickets | Customer Support Team |
+| Automated refunds | ₹8/ticket refund processing cost | ₹2/ticket refund processing cost | Finance Team |
+| Real-time packing status | 13% refund not received tickets | 5% refund not received tickets | Customer Support Team |

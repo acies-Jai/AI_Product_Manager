@@ -4,13 +4,12 @@
 CFO (Ananya Rao) + Finance Business Partner for Product (Saurabh Jain).
 
 ## Unit Economics (per order, Q1 FY26)
-- Avg Order Value (AOV): ₹520
+- Avg Order Value (AOV): ₹530
 - Contribution Margin: ₹18/order (3.5%) — target: ₹52/order (10%)
 - Delivery cost: ₹38/order
 - Dark store variable cost (picking, packaging): ₹22/order
 - Discount / subsidy burn: ₹44/order (needs reduction)
 - Payment gateway cost: ₹6/order
-
 ## P&L Levers Flagged
 1. Subsidy burn is the biggest drag — discount-led acquisition inflates CAC and hurts CM
 2. Payment failures cost ₹12Cr/month in failed transaction re-attempts + CS handling
